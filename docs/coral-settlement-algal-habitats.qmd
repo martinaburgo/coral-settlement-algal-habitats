@@ -1,0 +1,121 @@
+---
+title: "Coral settlement in algal habitats"
+author: "Martina Burgo"
+date: today
+date-format: "DD/MM/YYYY"
+format: 
+  html:
+    ## Format
+    theme: default
+    ## Table of contents
+    toc: true
+    toc-float: true
+    ## Numbering
+    number-sections: true
+    number-depth: 3
+    ## Layout
+    fig-caption-location: "bottom"
+    fig-align: "center"
+    fig-dpi: 72
+    tbl-cap-location: top
+    ## Code
+    code-fold: false
+    code-tools: true
+    code-summary: "Show the code"
+    code-line-numbers: true
+    ## Execution
+    execute:
+      echo: true
+      cache: true
+    ## Rendering
+    embed-resources: true
+crossref:
+  fig-title: '**Figure**'
+  fig-labels: arabic
+  tbl-title: '**Table**'
+  tbl-labels: arabic
+engine: knitr
+bibliography: ../docs/resources/references.bib
+output_dir: "docs"
+documentclass: article
+fontsize: 12pt
+mainfont: Arial
+mathfont: LiberationMono
+classoption: a4paper
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+knitr::opts_chunk$set(cache.lazy = FALSE,
+                      tidy = "styler")
+options(tinytex.engine = "xelatex")
+```
+
+# Preparations
+
+## Load the necessary libraries
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)   #for data wrangling
+library(stringr)
+library(car)
+library(brms)
+library(patchwork)
+library(corrplot)
+library(loo)
+library(tidybayes)
+library(DHARMa)     #for residual diagnostics
+library(rstan)      #for interfacing with STAN
+library(emmeans)
+
+source('../R/functions.R')
+```
+
+
+
+## Load data
+```{r}
+data <- read_xlsx(path = '../data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) %>%
+  add_row(., read_xlsx(path = '../data/primary/CH3-Algal-community-time-1.xlsx', sheet = 1)) %>%
+  select(!Date)
+metadata <- read_xlsx(path = '../data/primary/CH3-metadata.xlsx', sheet = 2) %>%
+  select(Tile, Treatment)
+```
+
+
+# Benthic composition
+
+## Load data
+
+1.  Load the data
+
+```{r BenthicComposition readData, results='markdown', eval=TRUE}
+```
+
+2.  Glimpse the data
+
+```{r BenthicComposition glimpse, results='markdown', eval=TRUE}
+```
+
+## Data processing
+
+1.  Arrange tile ascending to match metadata
+2.  Turn tile number into factor
+3.  Change % cover of "+" into 1 (rare taxa found in quadrants)
+4.  Turn cover into integer
+5.  Add metadata to data
+6.  Create canopy dataframe (height and density)
+7.  Calculate median, mean, sd of height
+8.  Make table with treatments and canopy measures
+
+```{r BenthicComposition process, results='markdown', eval=TRUE}
+```
