@@ -66,6 +66,7 @@ options(tinytex.engine = "xelatex")
 #| cache: false
 
 library(tidyverse)   #for data wrangling
+library(readxl)
 library(stringr)
 library(car)
 library(brms)
@@ -84,29 +85,26 @@ source('../R/functions.R')
 
 ## Load data
 ```{r}
-data <- read_xlsx(path = '../data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) %>%
-  add_row(., read_xlsx(path = '../data/primary/CH3-Algal-community-time-1.xlsx', sheet = 1)) %>%
+#| label: loadData
+
+
+algae <- read_xlsx(path = '../data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
+  add_row(read_xlsx(path = '../data/primary/CH3-Algal-community-time-1.xlsx', sheet = 1)) |>
   select(!Date)
-metadata <- read_xlsx(path = '../data/primary/CH3-metadata.xlsx', sheet = 2) %>%
-  select(Tile, Treatment)
+recruit <- read_xlsx(path = '../data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
+  full_join(read_xlsx(path = '../data/primary/CH3-metadata.xlsx', sheet = 2) |>
+  select(Tile, Treatment)) |>
+  filter(!is.na(Unbleached)) |>
+  group_by(Tile) |>
+  mutate(Total = sum(Unbleached)) |>
+  mutate(Tile = factor(Tile),
+         Treatment = factor(Treatment),
+         Grazing = factor(Grazing))
+str(recruit)
 ```
 
 
-# Benthic composition
-
-## Load data
-
-1.  Load the data
-
-```{r BenthicComposition readData, results='markdown', eval=TRUE}
-```
-
-2.  Glimpse the data
-
-```{r BenthicComposition glimpse, results='markdown', eval=TRUE}
-```
-
-## Data processing
+## Benthic composition
 
 1.  Arrange tile ascending to match metadata
 2.  Turn tile number into factor
@@ -117,5 +115,149 @@ metadata <- read_xlsx(path = '../data/primary/CH3-metadata.xlsx', sheet = 2) %>%
 7.  Calculate median, mean, sd of height
 8.  Make table with treatments and canopy measures
 
-```{r BenthicComposition process, results='markdown', eval=TRUE}
+
+
+```{r}
+algae <- algae |>
+  mutate(Cover = ifelse(Cover == "+", '1', Cover)) |>
+  mutate(Cover = as.numeric(Cover)) #adjust rare species
+
+canopy <- algae |>
+  filter(Taxa == "Sargassum") |>
+  mutate(H_mean = NA,
+         H_median = NA,
+         H_sd = NA)
+
+for (i in 1:nrow(canopy)) {
+  canopy[i, 'H_mean'] <- canopy[i, 'Height'] |>
+    str_split(', ') |>
+    unlist() |>
+    as.numeric() |>
+    mean()
+  
+  canopy[i, 'H_median'] <- canopy[i, 'Height'] |>
+    str_split(', ') |>
+    unlist() |>
+    as.numeric() |>
+    median()
+  
+  canopy[i, 'H_sd'] <- canopy[i, 'Height'] |>
+    str_split(', ') |>
+    unlist() |>
+    as.numeric() |>
+    sd()
+}
+
+canopy <- algae |>
+  distinct(Time, Tile) |>
+  full_join(canopy |> 
+              select(!Height)) |>
+  mutate(Taxa = 'Sargassum',
+         Cover = ifelse(is.na(Cover), 0, Cover),
+         H_mean = ifelse(is.na(H_mean), 0, H_mean),
+         H_median = ifelse(is.na(H_median), 0, H_median),
+         H_sd = ifelse(is.na(H_sd), 0, H_sd),
+         Density = ifelse(is.na(Density), 0, Density))
 ```
+
+
+# Exploratory data analysis
+
+```{r}
+dat |> 
+  ggplot(aes(y = Total, x = Treatment)) +
+  geom_violin() +
+  geom_point(color = 'black')
+```
+
+# Fit the model
+
+Model formula: 
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_{1,2,3} &\sim{} \mathcal{N}(0,1)\\
+\end{align}
+$$
+
+```{r}
+#| label: priors
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(0, 3), class = 'b')
+form <- bf(Total ~ Treatment, family = poisson(link = 'log')) 
+
+form |> get_prior(data = dat)
+
+dat.brm <- brm(form, prior = priors, data = dat, 
+               sample_prior = 'only', 
+               iter = 5000, 
+               warmup = 1000, 
+               chains = 3, cores = 3, 
+               thin = 5, 
+               refresh = 0, 
+               backend = 'rstan') 
+```
+
+```{r}
+dat.brm |> conditional_effects() |> plot(points = TRUE)
+```
+
+```{r}
+dat.brm2 <- dat.brm |>
+  update(sample_prior = 'yes')
+```
+
+```{r}
+dat.brm2 |> SUYR_prior_and_posterior()
+```
+
+## MCMC sampling diagnostics
+
+```{r}
+(dat.brm2$fit |> stan_trace()) + (dat.brm2$fit |> stan_ac()) + (dat.brm2$fit |> stan_rhat()) + (dat.brm2$fit |> stan_ess())
+#chains are well mixed and have converged on a stable posterior
+```
+
+## Model validation
+
+Posterior probability check:
+
+```{r}
+dat.brm2 |> pp_check(type = 'dens_overlay', ndraws = 100)
+```
+
+Checking the residuals
+
+```{r}
+dat.resids <- make_brms_dharma_res(dat.brm2, integerResponse = FALSE)
+testUniformity(dat.resids)
+plotResiduals(dat.resids, form = factor(rep(1, nrow(dat))))
+plotResiduals(dat.resids, quantreg = TRUE) 
+testDispersion(dat.resids)
+```
+
+# Model investigation
+
+## Partial effects plots
+
+```{r}
+dat.brm2 |> conditional_effects() |> plot(points = TRUE)
+```
+
+
+```{r}
+dat.brm2 |>
+  as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> #checks how confident we are that there's evidence of decline
+  knitr::kable()
+```
+
+

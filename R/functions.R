@@ -1,78 +1,131 @@
-## ---- setup
-assignInNamespace('.sep.label',  "^\\ *(#|--)+\\s*(@knitr|----+)(.*?)-*\\s*$", ns='knitr')
+########################################################
+########################################################
+# to check priors and posteriors
+# REF MURRAY
 
-tidyverse_style_with_comments_removed <- function() {
-  remove_comments <- function(pd) {
-    is_comment <- pd$token == "COMMENT"
-    pd <- pd[!is_comment,]
-    pd
+SUYR_prior_and_posterior <- function(mod) {
+  dat <- mod$data
+  terms <- attr(dat, 'terms')
+  response <- all.vars(update(terms, .~ 1))
+  predictors <- all.vars(terms)[-1]
+  ## rhs <- mod$formula %>% as.formula %>% brms:::str_rhs()
+  
+  f <- mod$formula %>% as.formula %>% update(NULL ~.)
+  rhs  <-
+    deparse1(f) %>%
+    str_remove("~") %>%
+    ## paste(f[2],f[3],sep='~') %>%
+    str_split("\\+") %>%
+    unlist() %>%
+    str_trim()
+  rhs
+  ## ## exclude any terms with a "|" or offset
+  ## rhs <-
+  ##     rhs[-grep("\\|",rhs)]
+  wch.rnd <- rhs[grep("\\|", rhs)]
+  if (length(wch.rnd)>0) f <- update(f, paste("~ . -",wch.rnd))
+  no.offset <- function(x, preserve = NULL) {
+    k <- 0
+    proc <- function(x) {
+      if (length(x) == 1) return(x)
+      if (x[[1]] == as.name("offset") && !((k<<-k+1) %in% preserve)) return(x[[1]])
+      replace(x, -1, lapply(x[-1], proc))
+    }
+    update(proc(x), ~ . - offset)
   }
-  tidyverse_with_comments_removed <- styler::tidyverse_style()
-  tidyverse_with_comments_removed$token$remove_comments <- remove_comments
-  tidyverse_with_comments_removed
+  f <- no.offset(f)
+  
+  Xmat <- model.matrix(f, dat)[,-1] %>%
+    as.matrix() %>% 
+    colMeans() 
+  ## if (length(Xmat)==1) Xmat <- Xmat %>% as.matrix()
+  ## Xmat <- dat %>%
+  ##     select(any_of(rhs)) %>%
+  ##     summarise(across(everything(), mean)) %>%
+  ##     as.matrix()
+  
+  b <- mod %>%
+    as_draws_df() %>%
+    dplyr::select(starts_with('b_'),
+                  -contains('Intercept')) %>%
+    as.matrix() %>%
+    suppressWarnings()
+  
+  scal <- as.vector(Xmat %*% t(b))
+  
+  ## fixed effects
+  ## brms_names <- brms:::change_effects(brmsterms(mod$formula),
+  ##                                     data = dat,
+  ##                                     pars = variables(mod))
+  ## brms_names <- sapply(brms_names, function(x) str_remove(x$fnames, "b_"))
+  priors <- mod %>% get_variables() %>% str_subset("^prior_.*") %>% str_subset("lprior", negate = TRUE) 
+  pars <- priors |>
+    str_subset("Intercept|b_") |>
+    str_replace_all("^prior_", "") |> 
+    str_replace("Intercept", "b_Intercept")
+  ## pars <- mod %>% get_variables() %>%
+  ##     str_subset(paste0("^b_(Intercept|",paste0(brms_names,collapse="|"),")"))
+  
+  ## auxillary
+  aux <- priors %>% str_subset("prior_(Intercept|b)", negate = TRUE) %>%
+    str_remove("^prior_")
+  pars <- c(pars, aux)
+  ## random effects
+  get_variables(mod)
+  if (length(wch.rnd)>0) {
+    ## ran.pars <- brms:::change_re(mod$ranef, pars = variables(mod))[[1]]$fnames
+    ran.pars <- get_variables(mod) |>
+      str_subset("^sd_")
+    pars <- c(pars, ran.pars)
+  }
+  ## variables(mod)
+  
+  ## Alternative...?
+  vars <- variables(mod)
+  priors <- vars %>% str_subset("prior") %>% str_subset("lprior", negate = TRUE)
+  all.pars <- priors %>% str_remove("prior_")
+  fixed.pars <- vars %>% str_subset("^b_")
+  other.pars <- all.pars %>% str_subset("^Intercept$|^b_", negate = TRUE)
+  other.pars <- vars %>% str_subset(paste0("^", other.pars, collapse = '|'))
+  pars <- c(fixed.pars, other.pars)
+  
+  ## coefs <- prior_summary(mod)$class %>% unique()
+  ## coefs.regex <- paste0("^b_", coefs, collapse = "|")
+  
+  ## get_priors(mod) |> filter(str_detect(Parameter, "prior_"))
+  
+  brms_names <- fixed.pars |> str_subset("Intercept", negate = TRUE) |> str_replace("^b_", "")
+  mod.pp <- mod %>%
+    as_draws_df() %>%
+    dplyr::select(any_of(c(pars, priors))) %>%
+    mutate(b_Intercept = b_Intercept + scal) %>%
+    pivot_longer(cols=everything(), names_to='key', values_to='value') %>% 
+    mutate(Type = ifelse(str_detect(key, 'prior'), 'Prior', 'Posterior'),
+           Parameter = ifelse(Type == 'Prior',
+                              str_remove(key, "^prior_"),
+                              str_remove(key, "^b_")
+           ),
+           ## Parameter = ifelse(Type == 'Posterior',
+           ##                     str_remove(Parameter, "__.*"),
+           ##                    Parameter),
+           ## Class = ifelse(Parameter %in% brms_names, 'b', Parameter),
+           Class = ifelse(Parameter %in% brms_names, 'b', Parameter),
+           Class = ifelse(Type == 'Posterior', str_remove(Class, "__.*"), Class),
+           Class = ifelse(Type == 'Posterior' & Parameter %in% str_remove(priors, "prior_b_"), paste0("b_", Parameter), Class)
+    ) %>%
+    suppressWarnings()
+  
+  return(
+    ggplot(data = NULL, aes(x=Type,  y=value)) +
+      stat_pointinterval(data = mod.pp %>% filter(Type == 'Prior')) +
+      stat_pointinterval(data = mod.pp %>% filter(Type != 'Prior' & (Class != 'b' | Parameter == 'b')),
+                         aes(colour = Parameter), position = position_dodge()) +
+      stat_pointinterval(data = mod.pp %>% filter(Type != 'Prior' & (Class == 'b' & Parameter != 'b')),
+                         aes(colour = Parameter), position = position_dodge())+
+      facet_wrap(~Class,  scales='free')
+  )
 }
 
-knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE,cache.lazy = FALSE, tidy='styler',
-                      tidy.opts=list(transformers = tidyverse_style_with_comments_removed()))
-## knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
-
-# save the built-in output hook
-hook_output <- knitr::knit_hooks$get("output")
-
-# set a new output hook to truncate text output
-knitr::knit_hooks$set(output = function(x, options) {
-  if (!is.null(n <- options$out.lines)) {
-    x <- xfun::split_lines(x)
-    if (length(x) > n) {
-      # truncate the output
-      x <- c(head(x, n), "....\n")
-    }
-    x <- paste(x, collapse = "\n")
-  }
-  hook_output(x, options)
-})
-options(tinytex.engine = 'xelatex')
-
-## ----end
-
-## ---- loadPackages
-library(knitr)
-library(tidybayes)
-library(tidyverse)
-library(forcats)
-library(patchwork)
-library(readxl)
-
-
-library(brms)
-library(DHARMa)
-library(emmeans)
-library(posterior)
-library(HDInterval)
-library(report)
-## ----end
-
-## ---- preparePaths
-DATA_PATH <<- "../data/" # <<- assigns it to the global environment rather than to the local environment
-OUTPUT_PATH <<- "../output/"
-FIGS_PATH <<- paste0(OUTPUT_PATH, "figures")
-TABS_PATH <<- paste0(OUTPUT_PATH, "tables")
-
-#paths should be in the global environment so that you can easily use them in every functions
-
-if (!dir.exists(DATA_PATH)) dir.create(DATA_PATH)
-if (!dir.exists(paste0(DATA_PATH,"primary"))) dir.create(paste0(DATA_PATH, "primary"))
-if (!dir.exists(paste0(DATA_PATH,"processed"))) dir.create(paste0(DATA_PATH, "processed"))
-if (!dir.exists(paste0(DATA_PATH,"modelled"))) dir.create(paste0(DATA_PATH, "modelled"))
-if (!dir.exists(paste0(DATA_PATH,"summarised"))) dir.create(paste0(DATA_PATH, "summarised"))
-if (!dir.exists(paste0(DATA_PATH,"workspace"))) dir.create(paste0(DATA_PATH, "workspace"))
-
-if (!dir.exists(OUTPUT_PATH)) dir.create(OUTPUT_PATH)
-if (!dir.exists(FIGS_PATH)) dir.create(FIGS_PATH)
-if (!dir.exists(TABS_PATH)) dir.create(TABS_PATH)
-## ----end
-
-## ---- brms DHARMa functions.R 
 make_brms_dharma_res <- function(brms_model, seed = 10, ...) {
   # equivalent to `simulateResiduals(lme4_model, use.u = FALSE)`
   # cores are set to 1 just to ensure reproducibility
@@ -113,105 +166,3 @@ make_brms_dharma_res <- function(brms_model, seed = 10, ...) {
   )
 }
 
-## ----end
-
-## ---- SUYR_prior_and_posterior function
-SUYR_prior_and_posterior <- function(mod) {
-  dat <- mod$data
-  terms <- attr(dat, 'terms')
-  response <- all.vars(update(terms, .~ 1))
-  predictors <- all.vars(terms)[-1]
-  ## rhs <- mod$formula %>% as.formula %>% brms:::str_rhs()
-  
-  f <- mod$formula %>% as.formula %>% update(NULL ~.)
-  rhs  <-
-    deparse1(f) %>%
-    str_remove("~") %>%
-    ## paste(f[2],f[3],sep='~') %>%
-    str_split("\\+") %>%
-    unlist() %>%
-    str_trim()
-  rhs
-  ## ## exclude any terms with a "|"
-  ## rhs <-
-  ##     rhs[-grep("\\|",rhs)]
-  wch.rnd <- rhs[grep("\\|", rhs)]
-  if (length(wch.rnd)>0) f <- update(f, paste("~ . -",wch.rnd))
-  
-  Xmat <- model.matrix(f, dat)[,-1] %>%
-    as.matrix() %>% 
-    colMeans() 
-  ## if (length(Xmat)==1) Xmat <- Xmat %>% as.matrix()
-  ## Xmat <- dat %>%
-  ##     select(any_of(rhs)) %>%
-  ##     summarise(across(everything(), mean)) %>%
-  ##     as.matrix()
-  
-  b <- mod %>%
-    as_draws_df() %>%
-    dplyr::select(starts_with('b_'),
-                  -contains('Intercept')) %>%
-    as.matrix() %>%
-    suppressWarnings()
-  
-  scal <- as.vector(Xmat %*% t(b))
-  
-  ## fixed effects
-  brms_names <- brms:::change_effects(brmsterms(mod$formula),
-                                      data = dat,
-                                      pars = variables(mod))
-  brms_names <- sapply(brms_names, function(x) str_remove(x$fnames, "b_"))
-  priors <- mod %>% get_variables() %>% str_subset("^prior_.*") %>% str_subset("lprior", negate = TRUE) 
-  pars <- mod %>% get_variables() %>%
-    str_subset(paste0("^b_(Intercept|",paste0(brms_names,collapse="|"),")"))
-  
-  ## auxillary
-  aux <- priors %>% str_subset("prior_(Intercept|b)", negate = TRUE) %>%
-    str_remove("^prior_")
-  pars <- c(pars, aux)
-  ## random effects
-  if (length(wch.rnd)>0) {
-    ran.pars <- brms:::change_re(mod$ranef, pars = variables(mod))[[1]]$fnames
-    pars <- c(pars, ran.pars)
-  }
-  variables(mod)
-  
-  vars <- variables(mod)
-  priors <- vars %>% str_subset("prior") %>% str_subset("lprior", negate = TRUE)
-  all.pars <- priors %>% str_remove("prior_")
-  fixed.pars <- vars %>% str_subset("^b_")
-  other.pars <- all.pars %>% str_subset("^Intercept$|^b$", negate = TRUE)
-  other.pars <- vars %>% str_subset(paste0("^", other.pars, collapse = '|'))
-  pars <- c(fixed.pars, other.pars)
-  
-  ## coefs <- prior_summary(mod)$class %>% unique()
-  ## coefs.regex <- paste0("^b_", coefs, collapse = "|")
-  
-  mod.pp <- mod %>%
-    as_draws_df() %>%
-    dplyr::select(any_of(c(pars, priors))) %>%
-    mutate(b_Intercept = b_Intercept + scal) %>%
-    pivot_longer(cols=everything(), names_to='key', values_to='value') %>% 
-    mutate(Type = ifelse(str_detect(key, 'prior'), 'Prior', 'Posterior'),
-           Parameter = ifelse(Type == 'Prior',
-                              str_remove(key, "^prior_"),
-                              str_remove(key, "^b_")
-           ),
-           ## Parameter = ifelse(Type == 'Posterior',
-           ##                     str_remove(Parameter, "__.*"),
-           ##                    Parameter),
-           Class = ifelse(Parameter %in% brms_names, 'b', Parameter),
-           Class = ifelse(Type == 'Posterior', str_remove(Class, "__.*"), Class)) %>%
-    suppressWarnings()
-  
-  return(
-    ggplot(data = NULL, aes(x=Type,  y=value)) +
-      stat_pointinterval(data = mod.pp %>% filter(Type == 'Prior')) +
-      stat_pointinterval(data = mod.pp %>% filter(Type != 'Prior' & (Class != 'b' | Parameter == 'b')),
-                         aes(colour = Parameter), position = position_dodge()) +
-      stat_pointinterval(data = mod.pp %>% filter(Type != 'Prior' & (Class == 'b' & Parameter != 'b')),
-                         aes(colour = Parameter), position = position_dodge())+
-      facet_wrap(~Class,  scales='free')
-  )
-}
-## ----end
