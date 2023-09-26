@@ -361,8 +361,12 @@ recruit |>
 ```{r}
 #| label: priorsComplex
 
-form <- bf(Total ~ Treatment + H_mean_broad, family = poisson(link = 'log')) 
+form <- bf(Total ~ H_mean_broad, family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
+
+recruit |>
+  summarise(mean = mean(H_mean_broad),
+            sd = sd(H_mean_broad))
 
 priors <- prior(normal(0.5, 1), class = 'Intercept') +
   prior(normal(0, 10), class = 'b')
@@ -426,7 +430,7 @@ recruit.brm4 |> conditional_effects() |>
 ```
 
 
-# Model investigation
+## Model investigation
 ```{r}
 recruit.brm4 |>
   as_draws_df() |>
@@ -438,3 +442,104 @@ recruit.brm4 |>
                   Pg = ~mean(.x > 1)) |> #checks how confident we are that there's evidence of decline
   knitr::kable()
 ```
+
+
+# Model 3 - Sargassum height at local scale
+
+## Fit model
+
+```{r}
+#| label: priorsComplex
+
+form <- bf(Total ~ H_mean_local, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+recruit |>
+  summarise(mean = mean(H_mean_local),
+            sd = sd(H_mean_local))
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(0, 10), class = 'b')
+
+recruit.brm5 <- brm(form, prior = priors, data = recruit, 
+               sample_prior = 'only', 
+               iter = 5000, 
+               warmup = 1000, 
+               chains = 3, cores = 3, 
+               thin = 5, 
+               refresh = 0, 
+               backend = 'rstan') 
+```
+
+
+```{r}
+recruit.brm5 |> conditional_effects() |> plot(points = TRUE, ask = FALSE)
+```
+
+```{r}
+recruit.brm6 <- recruit.brm5 |>
+  update(sample_prior = 'yes')
+```
+
+```{r}
+recruit.brm6 |> SUYR_prior_and_posterior()
+```
+
+
+## Diagnostics
+
+MCMC
+
+```{r}
+recruit.brm6$fit |> stan_trace()
+recruit.brm6$fit |> stan_ac() 
+recruit.brm5$fit |> stan_rhat() 
+recruit.brm6$fit |> stan_ess()
+```
+
+Density overlay
+```{r}
+recruit.brm6 |> pp_check(type = 'dens_overlay', ndraws = 100)
+```
+
+DHARMa
+```{r}
+recruit.resids <- make_brms_dharma_res(recruit.brm6, integerResponse = FALSE)
+wrap_elements(~testUniformity(recruit.resids)) +
+  wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) + 
+  wrap_elements(~plotResiduals(recruit.resids, quantreg = FALSE)) +
+  wrap_elements(~testDispersion(recruit.resids)) 
+```
+
+## Model investigation
+
+### Partial effects plots 
+```{r}
+recruit.brm6 |> conditional_effects() |>
+  plot(points = TRUE, ask = FALSE)
+```
+
+
+## Model investigation
+```{r}
+recruit.brm6 |>
+  as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> #checks how confident we are that there's evidence of decline
+  knitr::kable()
+```
+
+
+# Compare models
+
+```{r}
+loo::loo_compare(loo::loo(recruit.brm2),
+                 loo::loo(recruit.brm4),
+                 loo::loo(recruit.brm6))
+```
+
+
