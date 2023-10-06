@@ -374,3 +374,79 @@ read.delim(file = '../output/tables/M7Output.txt', sep = ',')
 ## Summary figure
 
 ![](../output/figures/M7Figure.png)
+
+# M12-13: Recruits \~ *Sargassum* cover
+
+::: panel-tabset
+## Model 12 - quadrats
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1} &\sim{} \mathcal{N}(20, 30)\\
+\end{align}
+$$
+
+### Output
+
+```{r}
+#| label: M12Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M12Output.txt', sep = ',')
+```
+
+### Summary figure
+
+![](../output/figures/M12Figure.png)
+
+## Model 13 - perimeter
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1} &\sim{} \mathcal{N}(35, 45)\\
+\end{align}
+$$
+
+
+### Output
+
+```{r}
+#| label: M13Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M13Output.txt', sep = ',')
+```
+
+### Summary figure
+
+![](../output/figures/M13Figure.png)
+
+:::
+
+
+## Compare quadrat vs perimeter
+
+```{r}
+#| label: CompareM12vsM13
+#| eval: false
+```
+
+There was no difference between the two models.
+
+

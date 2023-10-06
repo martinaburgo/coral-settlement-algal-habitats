@@ -1016,3 +1016,357 @@ recruit.brm20 |>
          Pg = round(Pg, 3)) |>
   write.table(file = 'output/tables/M10Output.txt', sep = ",", quote = FALSE, row.names = F)
 
+# M11: Recruit ~ Treat + Diversity corals ----
+## Fit model ----
+form <- bf(Total ~ Treatment + Shannon_broad_cor, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(1, 10), class = 'b')
+
+recruit.brm21 <- brm(form, prior = priors, data = recruit, 
+                   sample_prior = 'only', 
+                   iter = 5000, 
+                   warmup = 1000, 
+                   chains = 3, cores = 3, 
+                   thin = 5, 
+                   refresh = 0, 
+                   backend = 'rstan') 
+
+recruit.brm21 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm22 <- recruit.brm21 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm22 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm22$fit |> stan_trace()) + (recruit.brm22$fit |> stan_ac()) + (recruit.brm22$fit |> stan_rhat()) + (recruit.brm22$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm22 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm22, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm22, form, priors, recruit, file = 'data/modelled/M11_final.RData')
+
+## Investigation ----
+recruit.brm22 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M11Output
+recruit.brm22 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm22 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M11Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# M12: Recruit ~ Sarg. cover (broad) ----
+## Fit model ----
+form <- bf(Total ~ Freq_Sarg_broad, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(20, 30), class = 'b')
+
+recruit.brm23 <- brm(form, prior = priors, data = recruit, 
+                    sample_prior = 'only', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+recruit.brm23 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm24 <- recruit.brm23 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm24 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm24$fit |> stan_trace()) + (recruit.brm24$fit |> stan_ac()) + (recruit.brm24$fit |> stan_rhat()) + (recruit.brm24$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm24 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm24, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm24, form, priors, recruit, file = 'data/modelled/M12_Freq_Sarg_broad.RData')
+
+## Investigation ----
+recruit.brm24 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M12Output
+recruit.brm24 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm24 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M12Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(Freq_Sarg_broad = seq(min(Freq_Sarg_broad),
+                                        max(Freq_Sarg_broad),
+                                        len = 50)))
+fit <- recruit.brm24 |> 
+  emmeans(~Freq_Sarg_broad, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(Freq_Sarg_broad) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+M12Figure <- fit |> 
+  ggplot(aes(x = Freq_Sarg_broad,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' cover'))) +
+  scale_y_continuous('Total recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+M12Figure
+
+ggsave(filename = 'output/figures/M12Figure.png', width = 8, height = 5, dpi = 100)
+
+# M13: Recruit ~ Sarg. cover (local) ----
+## Fit model ----
+form <- bf(Total ~ Freq_Sarg_local, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(35, 45), class = 'b')
+
+recruit.brm25 <- brm(form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     thin = 5, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+recruit.brm25 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm26 <- recruit.brm25 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm26 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm26$fit |> stan_trace()) + (recruit.brm26$fit |> stan_ac()) + (recruit.brm26$fit |> stan_rhat()) + (recruit.brm26$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm26 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm26, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm26, form, priors, recruit, file = 'data/modelled/M13_Freq_Sarg_local.RData')
+
+## Investigation ----
+recruit.brm26 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M13Output
+recruit.brm26 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm26 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M13Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(Freq_Sarg_local = seq(min(Freq_Sarg_local),
+                                           max(Freq_Sarg_local),
+                                           len = 50)))
+fit <- recruit.brm26 |> 
+  emmeans(~Freq_Sarg_local, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(Freq_Sarg_local) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+M13Figure <- fit |> 
+  ggplot(aes(x = Freq_Sarg_local,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' cover'))) +
+  scale_y_continuous('Total recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+M13Figure
+
+ggsave(filename = 'output/figures/M13Figure.png', width = 8, height = 5, dpi = 100)
+
+# Compare ----
+## ---- CompareM12vsM13
+loo::loo_compare(loo::loo(recruit.brm24),
+                 loo::loo(recruit.brm26))
+## ----end
+
+
+# Thresholds ----
+recruit.brm4 |> 
+  emmeans(~H_mean_broad, at = with(recruit,
+                                   list(H_mean_broad = seq(min(H_mean_broad),
+                                                           max(H_mean_broad),
+                                                           len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(H_mean_broad),
+            Pl = mean(H_mean_broad < 1),
+            Pg = mean(H_mean_broad > 1))
+
+recruit.brm8 |> 
+  emmeans(~D_broad, at = with(recruit,
+                                   list(D_broad = seq(min(D_broad),
+                                                           max(D_broad),
+                                                           len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(D_broad),
+            Pl = mean(D_broad < 1),
+            Pg = mean(D_broad > 1))
+
+recruit.brm24 |> 
+  emmeans(~Freq_Sarg_broad, at = with(recruit,
+                              list(Freq_Sarg_broad = seq(min(Freq_Sarg_broad),
+                                                 max(Freq_Sarg_broad),
+                                                 len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(Freq_Sarg_broad),
+            Pl = mean(Freq_Sarg_broad < 1),
+            Pg = mean(Freq_Sarg_broad > 1))
+
+
+recruit.brm14 |> 
+  emmeans(~Shannon_broad_cor, at = with(recruit,
+                                      list(Shannon_broad_cor = seq(min(Shannon_broad_cor),
+                                                                 max(Shannon_broad_cor),
+                                                                 len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(Shannon_broad_cor),
+            Pl = mean(Shannon_broad_cor < 1),
+            Pg = mean(Shannon_broad_cor > 1))
