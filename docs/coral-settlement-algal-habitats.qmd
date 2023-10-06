@@ -165,7 +165,6 @@ scatterplotMatrix(~Total+H_mean_broad+Freq_Sarg_broad+H_mean_local+Freq_Sarg_loc
 recruit |> 
   dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, Shannon_broad_alg, Shannon_broad_cor, Shannon_local_alg, Shannon_local_cor, Tot_broad_alg, Tot_broad_coral, Tot_local_alg, Tot_local_coral) |> cor() |> corrplot()
 ```
-
 :::
 
 # Model 1 - Recruits \~ Treatment
@@ -183,7 +182,7 @@ $$
 
 ## Model investigation
 
-### Output with CIs
+### Output
 
 ```{r}
 #| label: M1Output
@@ -231,7 +230,6 @@ To find the groups:
 | Only canopy | -1/2          | -1/3                  | -1/2             |
 | Only mat    | 1/2           | -1/3                  | 1                |
 
-
 ```{r}
 #| label: PlannedContrast
 #| eval: false
@@ -241,3 +239,138 @@ To find the groups:
 #| echo: false
 read.delim(file = '../output/tables/M1PlannedContrast.txt', sep = ',')
 ```
+
+
+# M2-3: Recruits \~ *Sargassum* height
+
+::: panel-tabset
+## Model 2 - quadrats
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_{1} &\sim{} \mathcal{N}(6,8)\\
+\end{align}
+$$
+
+### Output
+
+```{r}
+#| label: M2Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M2Output.txt', sep = ',')
+```
+
+### Summary figure
+
+![](../output/figures/M2Figure.png)
+
+## Model 3 - perimeter
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_{1} &\sim{} \mathcal{N}(6,8)\\
+\end{align}
+$$
+
+
+### Output
+
+```{r}
+#| label: M3Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M3Output.txt', sep = ',')
+```
+
+### Summary figure
+
+![](../output/figures/M3Figure.png)
+
+:::
+
+
+## Compare quadrat vs perimeter
+
+```{r}
+#| label: CompareM2vsM3
+#| eval: false
+```
+
+There was no difference between the two models
+
+# Model 4 - Recruits \~ *Sargassum* density
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_{1} &\sim{} \mathcal{N}(1,3)\\
+\end{align}
+$$
+
+
+## Output
+
+```{r}
+#| label: M4Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M4Output.txt', sep = ',')
+```
+
+## Summary figure
+
+![](../output/figures/M4Figure.png)
+
+# Model 7 - Recruits \~ Diversity (quadrats)
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_{1,2} &\sim{} \mathcal{N}(1,2)\\
+\end{align}
+$$
+
+
+## Output
+
+```{r}
+#| label: M7Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M7Output.txt', sep = ',')
+```
+
+## Summary figure
+
+![](../output/figures/M7Figure.png)

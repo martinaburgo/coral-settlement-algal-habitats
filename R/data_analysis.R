@@ -187,5 +187,832 @@ recruit.brm2 |>
             Pg = mean(Response > 1)) |>
   write.table(file = 'output/tables/M1PlannedContrast.txt', sep = ",", quote = FALSE, row.names = F)
 
-# M2: ----
+# M2: Recruit ~ Height (broad) ----
+## Fit model ----
+form <- bf(Total ~ H_mean_broad, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(6, 8), class = 'b')
+
+recruit.brm3 <- brm(form, prior = priors, data = recruit, 
+                   sample_prior = 'only', 
+                   iter = 5000, 
+                   warmup = 1000, 
+                   chains = 3, cores = 3, 
+                   thin = 5, 
+                   refresh = 0, 
+                   backend = 'rstan') 
+
+recruit.brm3 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm4 <- recruit.brm3 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm4 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm4$fit |> stan_trace()) + (recruit.brm4$fit |> stan_ac()) + (recruit.brm4$fit |> stan_rhat()) + (recruit.brm4$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm4 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm4, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm4, form, priors, recruit, file = 'data/modelled/M2_Height_broad.RData')
+
+## Investigation ----
+recruit.brm4 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M2Output
+recruit.brm4 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm4 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M2Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(H_mean_broad = seq(min(H_mean_broad),
+                                        max(H_mean_broad),
+                                        len = 50)))
+fit <- recruit.brm4 |> 
+  emmeans(~H_mean_broad, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(H_mean_broad) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+M2Figure <- fit |> 
+  ggplot(aes(x = H_mean_broad,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
+  scale_y_continuous('Total recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+M2Figure
+
+ggsave(filename = 'output/figures/M2Figure.png', width = 8, height = 5, dpi = 100)
+
+# M3: Recruit ~ Height (local) ----
+## Fit model ----
+form <- bf(Total ~ H_mean_local, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(6, 8), class = 'b')
+
+recruit.brm5 <- brm(form, prior = priors, data = recruit, 
+                    sample_prior = 'only', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+recruit.brm5 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm6 <- recruit.brm5 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm6 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm6$fit |> stan_trace()) + (recruit.brm6$fit |> stan_ac()) + (recruit.brm6$fit |> stan_rhat()) + (recruit.brm6$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm6 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm6, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm6, form, priors, recruit, file = 'data/modelled/M3_Height_local.RData')
+
+## Investigation ----
+recruit.brm6 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M3Output
+recruit.brm6 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm6 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M3Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(H_mean_local = seq(min(H_mean_local),
+                                        max(H_mean_local),
+                                        len = 50)))
+fit <- recruit.brm6 |> 
+  emmeans(~H_mean_local, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(H_mean_local) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+M3Figure <- fit |> 
+  ggplot(aes(x = H_mean_local,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
+  scale_y_continuous('Total recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+M3Figure
+
+ggsave(filename = 'output/figures/M3Figure.png', width = 8, height = 5, dpi = 100)
+
+# Compare ----
+## ---- CompareM2vsM3
+loo::loo_compare(loo::loo(recruit.brm4),
+                 loo::loo(recruit.brm6))
+## ----end
+
+
+# M4: Recruit ~ Density ----
+## Fit model ----
+form <- bf(Total ~ D_broad, family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(1, 3), class = 'b')
+
+recruit.brm7 <- brm(form, prior = priors, data = recruit, 
+                    sample_prior = 'only', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+recruit.brm7 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm8 <- recruit.brm7 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm8 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm8$fit |> stan_trace()) + (recruit.brm8$fit |> stan_ac()) + (recruit.brm8$fit |> stan_rhat()) + (recruit.brm8$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm8 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm8, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm8, form, priors, recruit, file = 'data/modelled/M4_Density.RData')
+
+## Investigation ----
+recruit.brm8 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M4Output
+recruit.brm8 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm8 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M4Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(D_broad = seq(min(D_broad),
+                                   max(D_broad),
+                                        len = 50)))
+fit <- recruit.brm8 |> 
+  emmeans(~D_broad, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(D_broad) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+M4Figure <- fit |> 
+  ggplot(aes(x = D_broad,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' density'))) +
+  scale_y_continuous('Total recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+M4Figure
+
+ggsave(filename = 'output/figures/M4Figure.png', width = 8, height = 5, dpi = 100)
+
+# M5: Recruit ~ Species Richness (broad) ----
+## Fit model ----
+form <- bf(Total ~ scale(R_broad_alg) + scale(R_broad_coral), family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(2, 3), class = 'b')
+
+recruit.brm9 <- brm(form, prior = priors, data = recruit, 
+                    sample_prior = 'only', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+recruit.brm9 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm10 <- recruit.brm9 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm10 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm10$fit |> stan_trace()) + (recruit.brm10$fit |> stan_ac()) + (recruit.brm10$fit |> stan_rhat()) + (recruit.brm10$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm10 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm10, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm10, form, priors, recruit, file = 'data/modelled/M5_Richness_broad.RData')
+
+## Investigation ----
+recruit.brm10 |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+### Output ----
+### ---- M5Output
+recruit.brm10 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm10 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M5Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# M6: Recruit ~ Species Richness (local) ----
+## Fit model ----
+form <- bf(Total ~ scale(R_local_alg) + scale(R_local_coral), family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(2, 3), class = 'b')
+
+recruit.brm11 <- brm(form, prior = priors, data = recruit, 
+                    sample_prior = 'only', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+recruit.brm11 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm12 <- recruit.brm11 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm12 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm12$fit |> stan_trace()) + (recruit.brm12$fit |> stan_ac()) + (recruit.brm12$fit |> stan_rhat()) + (recruit.brm12$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm12 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm12, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm12, form, priors, recruit, file = 'data/modelled/M6_Richness_local.RData')
+
+## Investigation ----
+recruit.brm12 |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+### Output ----
+### ---- M6Output
+recruit.brm12 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm12 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M6Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# M7: Recruit ~ Diversity (broad) ----
+## Fit model ----
+form <- bf(Total ~ scale(Shannon_broad_alg) + scale(Shannon_broad_cor), family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(1, 2), class = 'b')
+
+recruit.brm13 <- brm(form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     thin = 5, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+recruit.brm13 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm14 <- recruit.brm13 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm14 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm14$fit |> stan_trace()) + (recruit.brm14$fit |> stan_ac()) + (recruit.brm14$fit |> stan_rhat()) + (recruit.brm14$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm14 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm14, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm14, form, priors, recruit, file = 'data/modelled/M7_Diversity_broad.RData')
+
+## Investigation ----
+recruit.brm14 |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+### Output ----
+### ---- M7Output
+recruit.brm14 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm14 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M7Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(Shannon_broad_cor = seq(min(Shannon_broad_cor),
+                                   max(Shannon_broad_cor),
+                                   len = 25)))
+fit <- recruit.brm14 |> 
+  emmeans(~Shannon_broad_cor, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(Shannon_broad_cor) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+M7Figure <- fit |> 
+  ggplot(aes(x = Shannon_broad_cor,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  scale_x_continuous('Shannon Diversity - corals (broad)') +
+  scale_y_continuous('Total recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+M7Figure
+
+ggsave(filename = 'output/figures/M7Figure.png', width = 8, height = 5, dpi = 100)
+
+# M8: Recruit ~ Diversity (local) ----
+## Fit model ----
+form <- bf(Total ~ scale(Shannon_local_alg) + scale(Shannon_local_cor), family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(1, 2), class = 'b')
+
+recruit.brm15 <- brm(form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     thin = 5, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+recruit.brm15 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm16 <- recruit.brm15 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm16 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm16$fit |> stan_trace()) + (recruit.brm16$fit |> stan_ac()) + (recruit.brm16$fit |> stan_rhat()) + (recruit.brm16$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm16 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm16, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm16, form, priors, recruit, file = 'data/modelled/M8_Diversity_local.RData')
+
+## Investigation ----
+recruit.brm16 |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+### Output ----
+### ---- M8Output
+recruit.brm16 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm16 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M8Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# M9: Recruit ~ Total cover (broad) ----
+## Fit model ----
+form <- bf(Total ~ scale(Tot_broad_alg) + scale(Tot_broad_coral), family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(35, 30), class = 'b')
+
+recruit.brm17 <- brm(form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     thin = 5, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+recruit.brm17 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm18 <- recruit.brm17 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm18 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm18$fit |> stan_trace()) + (recruit.brm18$fit |> stan_ac()) + (recruit.brm18$fit |> stan_rhat()) + (recruit.brm18$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm18 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm18, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm18, form, priors, recruit, file = 'data/modelled/M9_Cover_broad.RData')
+
+## Investigation ----
+recruit.brm18 |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+### Output ----
+### ---- M9Output
+recruit.brm18 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm18 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M9Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# M10: Recruit ~ Total cover (local) ----
+## Fit model ----
+form <- bf(Total ~ scale(Tot_local_alg) + scale(Tot_local_coral), family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 1), class = 'Intercept') +
+  prior(normal(35, 40), class = 'b')
+
+recruit.brm19 <- brm(form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     thin = 5, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+recruit.brm19 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm20 <- recruit.brm19 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm20 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm20$fit |> stan_trace()) + (recruit.brm20$fit |> stan_ac()) + (recruit.brm20$fit |> stan_rhat()) + (recruit.brm20$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm20 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm20, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm20, form, priors, recruit, file = 'data/modelled/M10_Cover_local.RData')
+
+## Investigation ----
+recruit.brm20 |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+### Output ----
+### ---- M9Output
+recruit.brm20 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruit.brm20 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/M10Output.txt', sep = ",", quote = FALSE, row.names = F)
 
