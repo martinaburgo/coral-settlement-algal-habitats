@@ -1,4 +1,5 @@
 library(tidyverse)
+library(readxl)
 library(vegan)
 library(GGally)
 library(corrplot)
@@ -13,8 +14,6 @@ library(EcolUtils)
 library(rstan)
 library(ggforce)
 library(concaveman)
-
-library(boral)
 
 
 data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
@@ -51,7 +50,6 @@ data.mds.scores <- data.mds |>
   fortify() |> 
   mutate(Label = label,
          Score = score) |>
-  ## mutate(across(c(NMDS1, NMDS2), as.numeric)) |> 
   full_join(data |> add_rownames(var='Label'))
 data.mds.scores.centroids <- data.mds.scores |>
   filter(Score == "sites") |>
@@ -81,23 +79,35 @@ g <-
 g
 ## ----end
 
+Xmat <- model.matrix(~-1+Treatment, data=data) #need to dummy code because it's categorical variables
+colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))
+envfit <- envfit(data.mds, env=Xmat)
+envfit #shows how different each variable is from the centroid, so a significsnt values is whethet that variable is moved from the 'general' community
 
-data(spider)
-y <- spider$abun
-X <- scale(spider$x) #environment so recruits?
-n <- nrow(y)
-p <- ncol(y)
-example_mcmc_control <- list(n.burnin = 10, n.iteration = 100,
-                             n.thin = 1)
-spiderfit_nb <- boral(y, family = "negative.binomial", 
-                      lv.control = list(num.lv = 2), row.eff = "fixed", 
-                      mcmc.control = example_mcmc_control, model.name = "spider.jags"
-)
+data.env.scores <- envfit |>
+  fortify() |> 
+  mutate(Label = label)
 
-lvsplot(spiderfit_nb, biplot = TRUE)
-
-spiderfit_nb <- boral(y, x = X, family = "negative.binomial", 
-                      lv.control = list(num.lv = 2), row.eff = "fixed", 
-                      mcmc.control = example_mcmc_control, model.name = "spider.jags"
-)
-lvsplot(spiderfit_nb, biplot = TRUE)
+g <- ggplot(data = NULL, aes(y=NMDS2, x=NMDS1)) +
+  geom_hline(yintercept=0, linetype='dotted') +
+  geom_vline(xintercept=0, linetype='dotted') +
+  geom_point(data=data.mds.scores %>% filter(Score=='sites'),
+             aes(color=Treatment)) +
+  geom_text(data=data.mds.scores %>% filter(Score=='sites'),
+            aes(label=Label, color=Treatment), hjust=-0.2) +
+  geom_segment(data=data.mds.scores %>% filter(Score=='species'),
+               aes(y=0, x=0, yend=NMDS2, xend=NMDS1),
+               arrow=arrow(length=unit(0.3,'lines')), color='red',
+               alpha =  0.2) +
+  geom_text(data=data.mds.scores %>% filter(Score=='species'),
+            aes(y=NMDS2*1.1, x=NMDS1*1.1, label=Label), color='red',
+            alpha =  0.2) + ggforce::geom_mark_ellipse(data=data.mds.scores %>% filter(Score=='sites'),
+                                                       aes(y=NMDS2, x=NMDS1, fill=Treatment), expand=0) + 
+  geom_segment(data = data.mds.scores,
+               aes(x = NMDS1_c, xend = NMDS1, y = NMDS2_c, yend = NMDS2, colour = Treatment)) + 
+  geom_segment(data=data.env.scores,
+               aes(y=0, x=0, yend=NMDS2, xend=NMDS1),
+               arrow=arrow(length=unit(0.3,'lines')), color='blue') +
+  geom_text(data=data.env.scores,
+            aes(y=NMDS2*1.1, x=NMDS1*1.1, label=Label), color='blue')
+g

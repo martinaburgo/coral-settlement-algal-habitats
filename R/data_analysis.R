@@ -26,11 +26,12 @@ recruit <- recruit |>
 
 # M1: Recruit ~ Treat ----
 ## Fit model ----
-form <- bf(Total ~ Treatment, family = poisson(link = 'log')) 
+form <- bf(Total ~ Treatment + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(0, 3), class = 'b')
+priors <- prior(normal(0.5, 5), class = 'Intercept') +
+  prior(normal(0, 10), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm <- brm(form, prior = priors, data = recruit, 
                    sample_prior = 'only', 
@@ -39,6 +40,8 @@ recruit.brm <- brm(form, prior = priors, data = recruit,
                    chains = 3, cores = 3, 
                    thin = 5, 
                    refresh = 0, 
+                   control = list(adapt_delta = 0.99, 
+                                  max_treedepth = 20),
                    backend = 'rstan') 
 
 recruit.brm |> 
@@ -189,17 +192,20 @@ recruit.brm2 |>
 
 # M2: Recruit ~ Height (broad) ----
 ## Fit model ----
-form <- bf(Total ~ H_mean_broad, family = poisson(link = 'log')) 
+form <- bf(Total ~ H_mean_broad + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(6, 8), class = 'b')
+priors <- prior(normal(0.5, 5), class = 'Intercept') +
+  prior(normal(6, 5), class = 'b')  +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm3 <- brm(form, prior = priors, data = recruit, 
                    sample_prior = 'only', 
                    iter = 5000, 
                    warmup = 1000, 
                    chains = 3, cores = 3, 
+                   control = list(adapt_delta = 0.99, 
+                                  max_treedepth = 20), 
                    thin = 5, 
                    refresh = 0, 
                    backend = 'rstan') 
@@ -297,11 +303,12 @@ ggsave(filename = 'output/figures/M2Figure.png', width = 8, height = 5, dpi = 10
 
 # M3: Recruit ~ Height (local) ----
 ## Fit model ----
-form <- bf(Total ~ H_mean_local, family = poisson(link = 'log')) 
+form <- bf(Total ~ H_mean_local + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(6, 8), class = 'b')
+priors <- prior(normal(0.5, 5), class = 'Intercept') +
+  prior(normal(6, 8), class = 'b') + 
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm5 <- brm(form, prior = priors, data = recruit, 
                     sample_prior = 'only', 
@@ -310,6 +317,8 @@ recruit.brm5 <- brm(form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     thin = 5, 
                     refresh = 0, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
                     backend = 'rstan') 
 
 recruit.brm5 |> 
@@ -412,17 +421,20 @@ loo::loo_compare(loo::loo(recruit.brm4),
 
 # M4: Recruit ~ Density ----
 ## Fit model ----
-form <- bf(Total ~ D_broad, family = poisson(link = 'log')) 
+form <- bf(Total ~ D_broad + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(1, 3), class = 'b')
+priors <- prior(normal(0.5, 20), class = 'Intercept') +
+  prior(normal(1, 3), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm7 <- brm(form, prior = priors, data = recruit, 
                     sample_prior = 'only', 
                     iter = 5000, 
                     warmup = 1000, 
                     chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
                     thin = 5, 
                     refresh = 0, 
                     backend = 'rstan') 
@@ -520,17 +532,20 @@ ggsave(filename = 'output/figures/M4Figure.png', width = 8, height = 5, dpi = 10
 
 # M5: Recruit ~ Species Richness (broad) ----
 ## Fit model ----
-form <- bf(Total ~ scale(R_broad_alg) + scale(R_broad_coral), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(R_broad_alg) + scale(R_broad_coral) + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(2, 3), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(2, 3), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm9 <- brm(form, prior = priors, data = recruit, 
                     sample_prior = 'only', 
                     iter = 5000, 
                     warmup = 1000, 
                     chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
                     thin = 5, 
                     refresh = 0, 
                     backend = 'rstan') 
@@ -598,17 +613,20 @@ recruit.brm10 |>
 
 # M6: Recruit ~ Species Richness (local) ----
 ## Fit model ----
-form <- bf(Total ~ scale(R_local_alg) + scale(R_local_coral), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(R_local_alg) + scale(R_local_coral) + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(2, 3), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(2, 3), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm11 <- brm(form, prior = priors, data = recruit, 
                     sample_prior = 'only', 
                     iter = 5000, 
                     warmup = 1000, 
                     chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
                     thin = 5, 
                     refresh = 0, 
                     backend = 'rstan') 
@@ -676,17 +694,20 @@ recruit.brm12 |>
 
 # M7: Recruit ~ Diversity (broad) ----
 ## Fit model ----
-form <- bf(Total ~ scale(Shannon_broad_alg) + scale(Shannon_broad_cor), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(Shannon_broad_alg) + scale(Shannon_broad_cor) + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(1, 2), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(1, 2), class = 'b') + 
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm13 <- brm(form, prior = priors, data = recruit, 
                      sample_prior = 'only', 
                      iter = 5000, 
                      warmup = 1000, 
                      chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20), 
                      thin = 5, 
                      refresh = 0, 
                      backend = 'rstan') 
@@ -784,17 +805,20 @@ ggsave(filename = 'output/figures/M7Figure.png', width = 8, height = 5, dpi = 10
 
 # M8: Recruit ~ Diversity (local) ----
 ## Fit model ----
-form <- bf(Total ~ scale(Shannon_local_alg) + scale(Shannon_local_cor), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(Shannon_local_alg) + scale(Shannon_local_cor) + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(1, 2), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(1, 2), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm15 <- brm(form, prior = priors, data = recruit, 
                      sample_prior = 'only', 
                      iter = 5000, 
                      warmup = 1000, 
                      chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20), 
                      thin = 5, 
                      refresh = 0, 
                      backend = 'rstan') 
@@ -862,17 +886,20 @@ recruit.brm16 |>
 
 # M9: Recruit ~ Total cover (broad) ----
 ## Fit model ----
-form <- bf(Total ~ scale(Tot_broad_alg) + scale(Tot_broad_coral), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(Tot_broad_alg) + scale(Tot_broad_coral) + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(35, 30), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(35, 30), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm17 <- brm(form, prior = priors, data = recruit, 
                      sample_prior = 'only', 
                      iter = 5000, 
                      warmup = 1000, 
                      chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20), 
                      thin = 5, 
                      refresh = 0, 
                      backend = 'rstan') 
@@ -940,17 +967,20 @@ recruit.brm18 |>
 
 # M10: Recruit ~ Total cover (local) ----
 ## Fit model ----
-form <- bf(Total ~ scale(Tot_local_alg) + scale(Tot_local_coral), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(Tot_local_alg) + scale(Tot_local_coral) + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 1), class = 'Intercept') +
-  prior(normal(35, 40), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(35, 30), class = 'b') + 
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm19 <- brm(form, prior = priors, data = recruit, 
                      sample_prior = 'only', 
                      iter = 5000, 
                      warmup = 1000, 
                      chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20), 
                      thin = 5, 
                      refresh = 0, 
                      backend = 'rstan') 
@@ -1018,17 +1048,20 @@ recruit.brm20 |>
 
 # M11: Recruit ~ Treat + Diversity corals ----
 ## Fit model ----
-form <- bf(Total ~ Treatment + Shannon_broad_cor, family = poisson(link = 'log')) 
+form <- bf(Total ~ Treatment + Shannon_broad_cor + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(1, 10), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(1, 10), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm21 <- brm(form, prior = priors, data = recruit, 
                    sample_prior = 'only', 
                    iter = 5000, 
                    warmup = 1000, 
                    chains = 3, cores = 3, 
+                   control = list(adapt_delta = 0.99, 
+                                  max_treedepth = 20), 
                    thin = 5, 
                    refresh = 0, 
                    backend = 'rstan') 
@@ -1096,17 +1129,20 @@ recruit.brm22 |>
 
 # M12: Recruit ~ Sarg. cover (broad) ----
 ## Fit model ----
-form <- bf(Total ~ Freq_Sarg_broad, family = poisson(link = 'log')) 
+form <- bf(Total ~ Freq_Sarg_broad + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(20, 30), class = 'b')
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(20, 30), class = 'b') + 
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm23 <- brm(form, prior = priors, data = recruit, 
                     sample_prior = 'only', 
-                    iter = 5000, 
-                    warmup = 1000, 
+                    iter = 10000, 
+                    warmup = 2500, 
                     chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
                     thin = 5, 
                     refresh = 0, 
                     backend = 'rstan') 
@@ -1204,17 +1240,20 @@ ggsave(filename = 'output/figures/M12Figure.png', width = 8, height = 5, dpi = 1
 
 # M13: Recruit ~ Sarg. cover (local) ----
 ## Fit model ----
-form <- bf(Total ~ Freq_Sarg_local, family = poisson(link = 'log')) 
+form <- bf(Total ~ Freq_Sarg_local + (1|Grazing), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(35, 45), class = 'b')
+  prior(normal(35, 45), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')
 
 recruit.brm25 <- brm(form, prior = priors, data = recruit, 
                      sample_prior = 'only', 
-                     iter = 5000, 
-                     warmup = 1000, 
+                     iter = 10000, 
+                     warmup = 2500, 
                      chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20), 
                      thin = 5, 
                      refresh = 0, 
                      backend = 'rstan') 

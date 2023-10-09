@@ -95,7 +95,6 @@ knitr::read_chunk('../R/data_analysis.R')
 #| label: loadData
 
 recruit <- read_csv(file = '../data/processed/recruit.csv', col_select = -1)
-recruit.brm2 <- load(file = '../data/modelled/M1_base.RData')
 ```
 
 Quick view of dataset:
@@ -165,6 +164,15 @@ scatterplotMatrix(~Total+H_mean_broad+Freq_Sarg_broad+H_mean_local+Freq_Sarg_loc
 recruit |> 
   dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, Shannon_broad_alg, Shannon_broad_cor, Shannon_local_alg, Shannon_local_cor, Tot_broad_alg, Tot_broad_coral, Tot_local_alg, Tot_local_coral) |> cor() |> corrplot()
 ```
+
+
+## Grazing
+```{r}
+ggplot(recruit, aes(x = Grazing, fill = Treatment)) + 
+  geom_bar(position = "stack")
+```
+
+
 :::
 
 # Model 1 - Recruits \~ Treatment
@@ -175,8 +183,8 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
-\beta_{1,2,3} &\sim{} \mathcal{N}(0,3)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 5)\\
+\beta_{1,2,3} &\sim{} \mathcal{N}(0,10)\\
 \end{align}
 $$
 
@@ -252,8 +260,8 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
-\beta_{1} &\sim{} \mathcal{N}(6,8)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
+\beta_{1} &\sim{} \mathcal{N}(6,5)\\
 \end{align}
 $$
 
@@ -281,7 +289,7 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
 \beta_{1} &\sim{} \mathcal{N}(6,8)\\
 \end{align}
 $$
@@ -323,7 +331,7 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
 \beta_{1} &\sim{} \mathcal{N}(1,3)\\
 \end{align}
 $$
@@ -353,7 +361,7 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 1)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
 \beta_{1,2} &\sim{} \mathcal{N}(1,2)\\
 \end{align}
 $$
@@ -386,7 +394,7 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
 \beta_{1} &\sim{} \mathcal{N}(20, 30)\\
 \end{align}
 $$
@@ -415,7 +423,7 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
 \beta_{1} &\sim{} \mathcal{N}(35, 45)\\
 \end{align}
 $$
