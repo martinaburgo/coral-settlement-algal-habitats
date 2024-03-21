@@ -124,7 +124,7 @@ recruit <- recruit |>
 # Exploratory data analysis
 
 ::: panel-tabset
-## By Treatment
+## Treatment
 
 ```{r}
 #| fig-width: 8
@@ -165,14 +165,21 @@ recruit |>
   dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, Shannon_broad_alg, Shannon_broad_cor, Shannon_local_alg, Shannon_local_cor, Tot_broad_alg, Tot_broad_coral, Tot_local_alg, Tot_local_coral) |> cor() |> corrplot()
 ```
 
-
 ## Grazing
+
 ```{r}
+#| fig-width: 32
+#| fig-height: 20
+#| echo: false
+
 ggplot(recruit, aes(x = Grazing, fill = Treatment)) + 
-  geom_bar(position = "stack")
+  geom_bar(position = "stack") + theme_classic() +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
 ```
-
-
 :::
 
 # Model 1 - Recruits \~ Treatment
@@ -182,9 +189,11 @@ Model formula:
 $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
-ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+log(\lambda_i) &= \beta_0 + \beta X + \gamma _j\\
+\gamma_j \sim{} \mathcal{N}(\sigma, \sigma_1^2)\\
 \beta_0 &\sim{} \mathcal{N}(0.5, 5)\\
 \beta_{1,2,3} &\sim{} \mathcal{N}(0,10)\\
+\sigma_1 \sim{} \mathcal{t}(3, 0, 3)\\
 \end{align}
 $$
 
@@ -228,15 +237,17 @@ We're going to compare specific groups:
 
 1.  No algae/Only mat vs All algae/Only canopy
 2.  No algae vs Any algae
+3.  Mat vs Any algae
+4.  No algae vs All algae/Only canopy
 
 To find the groups:
 
-|             | Mat vs Canopy | No algae vs Any algae | Mat vs Any algae |
-|-------------|---------------|-----------------------|------------------|
-| All algae   | -1/2          | -1/3                  | -1/2             |
-| No algae    | 1/2           | 1                     | 0                |
-| Only canopy | -1/2          | -1/3                  | -1/2             |
-| Only mat    | 1/2           | -1/3                  | 1                |
+|             | "Mat" vs "Canopy" | No algae vs Any algae | Mat vs Any algae | No algae vs "Canopy" |
+|-----------|-------------|--------------|-------------|-------------|
+| All algae   | -1/2              | -1/3                  | -1/2             | -1/2                 |
+| No algae    | 1/2               | 1                     | 0                | 1                    |
+| Only canopy | -1/2              | -1/3                  | -1/2             | -1/2                 |
+| Only mat    | 1/2               | -1/3                  | 1                | 0                    |
 
 ```{r}
 #| label: PlannedContrast
@@ -247,7 +258,6 @@ To find the groups:
 #| echo: false
 read.delim(file = '../output/tables/M1PlannedContrast.txt', sep = ',')
 ```
-
 
 # M2-3: Recruits \~ *Sargassum* height
 
@@ -294,7 +304,6 @@ ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
 \end{align}
 $$
 
-
 ### Output
 
 ```{r}
@@ -310,9 +319,7 @@ read.delim(file = '../output/tables/M3Output.txt', sep = ',')
 ### Summary figure
 
 ![](../output/figures/M3Figure.png)
-
 :::
-
 
 ## Compare quadrat vs perimeter
 
@@ -335,7 +342,6 @@ ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
 \beta_{1} &\sim{} \mathcal{N}(1,3)\\
 \end{align}
 $$
-
 
 ## Output
 
@@ -365,7 +371,6 @@ ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
 \beta_{1,2} &\sim{} \mathcal{N}(1,2)\\
 \end{align}
 $$
-
 
 ## Output
 
@@ -428,7 +433,6 @@ ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
 \end{align}
 $$
 
-
 ### Output
 
 ```{r}
@@ -444,9 +448,7 @@ read.delim(file = '../output/tables/M13Output.txt', sep = ',')
 ### Summary figure
 
 ![](../output/figures/M13Figure.png)
-
 :::
-
 
 ## Compare quadrat vs perimeter
 
@@ -457,4 +459,30 @@ read.delim(file = '../output/tables/M13Output.txt', sep = ',')
 
 There was no difference between the two models.
 
+
+
+# Model 14 - Recruits ~ Density + Coral diversity
+
+Model formula:
+
+$$
+\begin{align}
+y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
+ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
+\beta_{1} &\sim{} \mathcal{N}(15, 20)\\
+\end{align}
+$$
+
+## Output
+
+```{r}
+#| label: M14Output
+#| eval: false
+```
+
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/M14Output.txt', sep = ',')
+```
 
