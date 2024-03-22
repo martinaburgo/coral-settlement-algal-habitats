@@ -25,9 +25,10 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
   ungroup() |>
   dplyr::select(Tile, Grazing, Treatment, Total) |> 
   full_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
+              dplyr::filter(Category != "Coral") |>
   dplyr::select(Tile, Taxa, Cover) |>
   mutate(Cover = ifelse(Cover == "+", '0.5', Cover)) |>
-  mutate(Cover = as.numeric(Cover)) |> #adjust rare species
+  mutate(Cover = as.numeric(Cover)) |> #adjust rare species 
   group_by(Tile) |>
   mutate(Freq = Cover / sum(Cover)*100) |>
   ungroup() |>
@@ -35,6 +36,7 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
   pivot_wider(names_from = Taxa, values_from = Freq, values_fill = 0)) |>
   dplyr::filter(!is.na(Total))
 
+data[is.na(data)] <- 0
 head(data)
 
 ## ---- MDS fit
@@ -111,3 +113,7 @@ g <- ggplot(data = NULL, aes(y=NMDS2, x=NMDS1)) +
   geom_text(data=data.env.scores,
             aes(y=NMDS2*1.1, x=NMDS1*1.1, label=Label), color='blue')
 g
+
+
+data.adonis<-adonis2(data.dist~Treatment,  data=data)
+data.adonis
