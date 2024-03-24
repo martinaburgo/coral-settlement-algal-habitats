@@ -1359,12 +1359,12 @@ loo::loo_compare(loo::loo(recruit.brm24),
 ## ----end
 
 
-# M14: Recruit ~ Density + Shan. cor ----
-scatterplotMatrix(~Total+Treatment+R_broad_alg+Shannon_broad_cor, 
+# M14: Recruit ~ Diversities ----
+scatterplotMatrix(~Total+R_broad_alg+Shannon_broad_cor, 
                   data = recruit, diagonal = list(method = 'boxplot'))
 
 ## Fit model ----
-form <- bf(Total ~ Treatment + scale(R_broad_alg) + scale(Shannon_broad_cor) + (1|Grazing), 
+form <- bf(Total ~ scale(R_broad_alg) + scale(Shannon_broad_cor) + (1|Grazing), 
            family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
