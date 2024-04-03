@@ -19,14 +19,20 @@ source('R/functions.R')
 
 # Load data ----
 recruit <- read_csv(file = 'data/processed/recruit.csv', col_select = -1)
+tile_benthos <- readxl::read_xlsx(path = "data/primary/CH3-tile-benthos.xlsx", sheet = 1) |>
+  mutate(Sediment = factor(Sediment,
+                           c('No', 'Low', 'Medium', 'High'), ordered = TRUE),
+         Turf_height = factor(Turf_height,
+                           c('No', 'Low', 'Medium', 'High'), ordered = TRUE))
 
 recruit <- recruit |>
   mutate(Treatment = factor(Treatment),
-         Grazing = factor(Grazing, c('No', 'Light', 'Medium', 'Heavy'), ordered = TRUE))
+         Grazing = factor(Grazing, c('No', 'Light', 'Medium', 'Heavy'), ordered = TRUE)) |>
+  full_join(tile_benthos)
 
 # M1: Recruit ~ Treat ----
 ## Fit model ----
-form <- bf(Total ~ Treatment + (1|Grazing), family = poisson(link = 'log')) 
+form <- bf(Total ~ Treatment + (1|Sediment), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 5), class = 'Intercept') +
@@ -195,7 +201,7 @@ recruit.brm2 |>
 
 # M2: Recruit ~ Height (broad) ----
 ## Fit model ----
-form <- bf(Total ~ H_mean_broad + (1|Grazing), family = poisson(link = 'log')) 
+form <- bf(Total ~ H_mean_broad + (1|Sediment), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 5), class = 'Intercept') +
@@ -306,7 +312,7 @@ ggsave(filename = 'output/figures/M2Figure.png', width = 8, height = 5, dpi = 10
 
 # M3: Recruit ~ Height (local) ----
 ## Fit model ----
-form <- bf(Total ~ H_mean_local + (1|Grazing), family = poisson(link = 'log')) 
+form <- bf(Total ~ H_mean_local + (1|Sediment), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 5), class = 'Intercept') +
@@ -424,7 +430,7 @@ loo::loo_compare(loo::loo(recruit.brm4),
 
 # M4: Recruit ~ Density ----
 ## Fit model ----
-form <- bf(Total ~ D_broad + (1|Grazing), family = poisson(link = 'log')) 
+form <- bf(Total ~ D_broad + (1|Sediment), family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 20), class = 'Intercept') +
@@ -1579,3 +1585,72 @@ diversity.brm2 |>
          rhat = round(rhat, 3),
          Pl = round(Pl, 3),
          Pg = round(Pg, 3))
+
+
+# M15: Recruit ~ Tile benthos ----
+scatterplotMatrix(~Total+Sediment+Turf_height+Turf_cover+CCA_cover, 
+                  data = recruit, diagonal = list(method = 'boxplot'))
+
+## Fit model ----
+form <- bf(Total ~ Sediment*Turf_height, 
+           family = poisson(link = 'log')) 
+form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 20), class = 'Intercept') +
+  prior(normal(15, 100), class = 'b')
+
+recruit.brm29 <- brm(form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 10000, 
+                     warmup = 2500, 
+                     chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 30), 
+                     thin = 10, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+recruit.brm29 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruit.brm30 <- recruit.brm29 |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruit.brm30 |> 
+  SUYR_prior_and_posterior()
+
+## MCMC Sampling diagnostics
+(recruit.brm30$fit |> stan_trace()) + (recruit.brm30$fit |> stan_ac()) + (recruit.brm30$fit |> stan_rhat()) + (recruit.brm30$fit |> stan_ess())
+
+## Model validation
+### Posterior probability check
+recruit.brm30 |> pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruit.brm30, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+## Save model ----
+save(recruit.brm30, form, priors, recruit, file = 'data/modelled/M15_all_vars.RData')
+
+## Investigation ----
+recruit.brm30 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- M15Output
+recruit.brm30 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
