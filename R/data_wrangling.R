@@ -11,7 +11,12 @@ benthic_local <- read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx'
 data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
   full_join(read_xlsx(path = 'data/primary/CH3-metadata.xlsx', sheet = 2) |> #adding treatments
               select(Tile, Treatment)) 
-class <- read_xlsx(path = 'data/primary/Benthic_categories.xlsx', sheet = 1)
+tile_benthos <- readxl::read_xlsx(path = "data/primary/CH3-tile-benthos.xlsx", sheet = 1) |>
+  mutate(Sediment = factor(Sediment,
+                           c('No', 'Low', 'Medium', 'High'), ordered = TRUE),
+         Turf_height = factor(Turf_height,
+                              c('No', 'Low', 'Medium', 'High'), ordered = TRUE),
+         Tile = factor(Tile))
 str(data)
 
 # Data wrangling ----
@@ -87,32 +92,28 @@ for (i in 1:nrow(canopy_local)) {
 ## Species Richness and Divesity ----
 ### Richness ----
 R_broad <- benthic_broad |>
-  left_join(class) |>
-  filter(Classification != 'Other') |>
-  group_by(Tile, Classification) |>
+  filter(Category != 'Other') |>
+  group_by(Tile, Category) |>
   summarise(R_broad = n()) |>
-  pivot_wider(names_from = Classification, values_from = R_broad, values_fill = 0) |>
-  rename(R_broad_alg = Alga,
+  pivot_wider(names_from = Category, values_from = R_broad, values_fill = 0) |>
+  rename(R_broad_alg = Macroalgae,
          R_broad_coral = Coral)
 
 R_local <- benthic_local |>
-  left_join(class) |>
-  filter(Classification != 'Other') |>
-  group_by(Tile, Classification) |>
+  filter(Category != 'Other') |>
+  group_by(Tile, Category) |>
   summarise(n = n()) |>
-  pivot_wider(names_from = Classification, values_from = n, values_fill = 0) |>
-  rename(R_local_alg = Alga,
+  pivot_wider(names_from = Category, values_from = n, values_fill = 0) |>
+  rename(R_local_alg = Macroalgae,
          R_local_coral = Coral)
 
 Shannon_broad_alg <- benthic_broad |>
-  left_join(class) |>
-  filter(Classification == 'Alga') |>
+  filter(Category == 'Macroalgae') |>
   distinct(Tile) |>
   arrange(-Tile) |>
   add_column(benthic_broad |>
-               left_join(class) |>
-               filter(Classification == 'Alga') |>
-               dplyr::select(-Time, -Height, -Density, -Cover, -Classification) |>
+               filter(Category == 'Macroalgae') |>
+               dplyr::select(-Time, -Height, -Density, -Cover, -Category) |>
                pivot_wider(names_from = Taxa, values_from = Freq_broad, values_fill = 0) |>
                arrange(-Tile) |>
                diversity(index = 'shannon') |>
@@ -121,14 +122,12 @@ Shannon_broad_alg <- benthic_broad |>
 
 ### Diversity ----
 Shannon_broad_alg <- benthic_broad |>
-  left_join(class) |>
-  filter(Classification == 'Alga') |>
+  filter(Category == 'Macroalgae') |>
   distinct(Tile) |>
   arrange(-Tile) |>
   add_column(benthic_broad |>
-               left_join(class) |>
-               filter(Classification == 'Alga') |>
-               dplyr::select(-Time, -Height, -Density, -Cover, -Classification) |>
+               filter(Category == 'Macroalgae') |>
+               dplyr::select(-Time, -Height, -Density, -Cover, -Category) |>
                pivot_wider(names_from = Taxa, values_from = Freq_broad, values_fill = 0) |>
                arrange(-Tile) |>
                diversity(index = 'shannon') |>
@@ -136,14 +135,12 @@ Shannon_broad_alg <- benthic_broad |>
   rename(Shannon_broad_alg = value)
 
 Shannon_local_alg <- benthic_local |>
-  left_join(class) |>
-  filter(Classification == 'Alga') |>
+  filter(Category == 'Macroalgae') |>
   distinct(Tile) |>
   arrange(-Tile) |>
   add_column(benthic_local |>
-               left_join(class) |>
-               filter(Classification == 'Alga') |>
-               dplyr::select(-Time, -Height, -Perimeter, -Classification) |>
+               filter(Category == 'Macroalgae') |>
+               dplyr::select(-Time, -Height, -Perimeter, -Category) |>
                pivot_wider(names_from = Taxa, values_from = Freq_local, values_fill = 0) |>
                arrange(-Tile) |>
                diversity(index = 'shannon') |>
@@ -151,14 +148,12 @@ Shannon_local_alg <- benthic_local |>
   rename(Shannon_local_alg = value)
 
 Shannon_broad_cor <- benthic_broad |>
-  left_join(class) |>
-  filter(Classification == 'Coral') |>
+  filter(Category == 'Coral') |>
   distinct(Tile) |>
   arrange(-Tile) |>
   add_column(benthic_broad |>
-               left_join(class) |>
-               filter(Classification == 'Coral') |>
-               dplyr::select(-Time, -Height, -Density, -Cover, -Classification) |>
+               filter(Category == 'Coral') |>
+               dplyr::select(-Time, -Height, -Density, -Cover, -Category) |>
                pivot_wider(names_from = Taxa, values_from = Freq_broad, values_fill = 0) |>
                arrange(-Tile) |>
                diversity(index = 'shannon') |>
@@ -166,14 +161,12 @@ Shannon_broad_cor <- benthic_broad |>
   rename(Shannon_broad_cor = value)
 
 Shannon_local_cor <- benthic_local |>
-  left_join(class) |>
-  filter(Classification == 'Coral') |>
+  filter(Category == 'Coral') |>
   distinct(Tile) |>
   arrange(-Tile) |>
   add_column(benthic_local |>
-               left_join(class) |>
-               filter(Classification == 'Coral') |>
-               dplyr::select(-Time, -Height, -Perimeter, -Classification) |>
+               filter(Category == 'Coral') |>
+               dplyr::select(-Time, -Height, -Perimeter, -Category) |>
                pivot_wider(names_from = Taxa, values_from = Freq_local, values_fill = 0) |>
                arrange(-Tile) |>
                diversity(index = 'shannon') |>
@@ -182,21 +175,19 @@ Shannon_local_cor <- benthic_local |>
 
 ### Coral cover ----
 Tot_broad <- benthic_broad |>
-  left_join(class) |>
-  filter(Classification != 'Other') |>
-  group_by(Tile, Classification) |>
+  filter(Category != 'Other') |>
+  group_by(Tile, Category) |>
   summarise(n = sum(Freq_broad)) |>
-  pivot_wider(names_from = Classification, values_from = n, values_fill = 0) |>
-  rename(Tot_broad_alg = Alga,
+  pivot_wider(names_from = Category, values_from = n, values_fill = 0) |>
+  rename(Tot_broad_alg = Macroalgae,
          Tot_broad_coral = Coral)
 
 Tot_local <- benthic_local |>
-  left_join(class) |>
-  filter(Classification != 'Other') |>
-  group_by(Tile, Classification) |>
+  filter(Category != 'Other') |>
+  group_by(Tile, Category) |>
   summarise(n = sum(Freq_local)) |>
-  pivot_wider(names_from = Classification, values_from = n, values_fill = 0) |>
-  rename(Tot_local_alg = Alga,
+  pivot_wider(names_from = Category, values_from = n, values_fill = 0) |>
+  rename(Tot_local_alg = Macroalgae,
          Tot_local_coral = Coral)
 
 # Combine datasets ----
@@ -233,7 +224,8 @@ recruit <- data |>
               mutate(Tile = factor(Tile))) |>
   left_join(Tot_local |>
               mutate(Tile = factor(Tile))) |>
-  mutate_all(~replace(., is.na(.), 0))
+  mutate_all(~replace(., is.na(.), 0)) |>
+  left_join(tile_benthos)
 
 # Save ----
-write.csv(recruit, file = '../data/processed/recruit.csv')
+write.csv(recruit, file = 'data/processed/recruit.csv')
