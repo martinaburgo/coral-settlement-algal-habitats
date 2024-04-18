@@ -115,5 +115,6 @@ g <- ggplot(data = NULL, aes(y=NMDS2, x=NMDS1)) +
 g
 
 
+data.dist <- vegdist(wisconsin(data[,-c(1:4)]^0.25),"bray")
 data.adonis<-adonis2(data.dist~Treatment,  data=data)
 data.adonis
