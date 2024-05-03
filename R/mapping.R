@@ -5,6 +5,7 @@ library(ggplot2)
 library(ggrepel)
 library(scales)
 library(OpenStreetMap)
+library(patchwork)
 
 
 labs <- data.frame(
@@ -14,14 +15,14 @@ labs <- data.frame(
   stringsAsFactors = FALSE) 
 
 sf_oz <- ozmap("states")
-subset(sf_oz, NAME == "Queensland") |>
+QLD_map <- subset(sf_oz, NAME == "Queensland") |>
   ggplot() + geom_sf() + 
-  geom_point(data = labs, aes(long, lat), size = 2) +
-  geom_text_repel(data = labs, aes(long, lat, label = cities), size = 5) +
-  ylab("") + xlab("") +
+  geom_point(data = labs, aes(long, lat), size = 3) +
+  geom_text_repel(data = labs, aes(long, lat, label = cities), size = 6, 
+                  segment.size = 0, direction = "x") +
+  ylab("Latitude") + xlab("Longitude") +
   theme_classic() +
-  theme(text = element_text(colour = 'black'), 
-        axis.text = element_text(size = rel(1.5)))
+  theme(text = element_text(colour = 'black', size = 25))
 
 
 labs <- data.frame(
@@ -31,15 +32,18 @@ labs <- data.frame(
   stringsAsFactors = FALSE) 
 
 lga_sf <- ozmap_data("abs_lga")
-subset(lga_sf, NAME == "Townsville (C)") |>
+Maggie_map <- subset(lga_sf, NAME == "Townsville (C)") |>
  ggplot() + geom_sf() +
   coord_sf(
-    xlim = c(146.7, 147.05),
-    ylim = c(-19.32, -19.05)
+    xlim = c(146.75, 146.92),
+    ylim = c(-19.28, -19.1)
   ) + 
-  geom_point(data = labs, aes(long, lat), size = 2) +
-  geom_text_repel(data = labs, aes(long, lat, label = cities), size = 5) +
+  geom_point(data = labs, aes(long, lat), size = 3) +
+  geom_text_repel(data = labs, aes(long, lat, label = cities), size = 6, 
+                  segment.size = 0, direction = "y") +
   ylab("") + xlab("") +
   theme_classic() +
-  theme(text = element_text(colour = 'black'), 
-        axis.text = element_text(size = rel(1.5)))
+  theme(text = element_text(colour = 'black', size = 35))
+
+QLD_map + Maggie_map
+
