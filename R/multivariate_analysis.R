@@ -1,3 +1,5 @@
+# PACKAGES ----
+
 library(tidyverse)
 library(readxl)
 library(vegan)
@@ -15,36 +17,90 @@ library(rstan)
 library(ggforce)
 library(concaveman)
 
-
+# READ DATA ----
 data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
-  full_join(read_xlsx(path = 'data/primary/CH3-metadata.xlsx', sheet = 2) |> #adding treatments
-              dplyr::select(Tile, Treatment)) |>
+  full_join(read_xlsx(path = 'data/primary/CH3-metadata.xlsx', sheet = 2) |>
+              dplyr::select(Tile, Treatment, T1_survey) |>
+              dplyr::filter(T1_survey == 'Done')) |>
+  full_join(read_xlsx(path = 'data/primary/CH3-tile-benthos.xlsx', sheet = 1)) |>
   group_by(Tile) |>
   mutate(Total = sum(Unbleached)) |>
   dplyr::distinct(Tile, .keep_all = TRUE) |>
   ungroup() |>
-  dplyr::select(Tile, Grazing, Treatment, Total) |> 
-  full_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
+  dplyr::select(Tile, Grazing, Treatment, T1_survey,
+                Sediment, Turf_height, Turf_cover, CCA_cover, Algae_cover, Total) |>
+  left_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
               dplyr::filter(Category != "Coral") |>
-  dplyr::select(Tile, Taxa, Cover) |>
-  mutate(Cover = ifelse(Cover == "+", '0.5', Cover)) |>
-  mutate(Cover = as.numeric(Cover)) |> #adjust rare species 
-  group_by(Tile) |>
-  mutate(Freq = Cover / sum(Cover)*100) |>
-  ungroup() |>
-  dplyr::select(-Cover) |>
-  pivot_wider(names_from = Taxa, values_from = Freq, values_fill = 0)) |>
-  dplyr::filter(!is.na(Total))
+              dplyr::select(Time, Tile, Taxa, Cover) |>
+              mutate(Cover = ifelse(Cover == "+", '0.5', Cover)) |> #adjust rare species 
+              mutate(Cover = as.numeric(Cover)) |>
+              group_by(Tile) |>
+              mutate(Freq = Cover / sum(Cover)*100) |>
+              ungroup() |>
+              dplyr::select(-Cover) |>
+              tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0)) |>
+  dplyr::filter(T1_survey == 'Done') |>
+  dplyr::select(!T1_survey)
 
-data[is.na(data)] <- 0
-head(data)
-
+# MDS ----
+## MDS Plot ----
 ## ---- MDS fit
 #non-metric multidimensional scaling
-data.mds <- metaMDS(data[,-c(1:4)], k=2,  plot=TRUE) #it always standardise by square root
+data.mds <- metaMDS(data[,-c(1:10)], k=2,  plot=TRUE) #it always standardise by square root
 data.mds #check that the stress is <0.2, the dimensions show to what reduction we drove the data
 stressplot(data.mds) #N.B. is usually a non linear trend
 ## ----end
+
+
+## Pretty MDS plot ----
+# from https://forum.posit.co/t/improve-my-nmds-graph-design/106418
+NMDS <-  data.frame(MDS1 = data.mds$points[,1], MDS2 = data.mds$points[,2],
+                    group = data$Treatment)
+
+pl <- ordiellipse(data.mds, 
+                  data$Treatment, 
+                  kind="se", conf=0.95, lwd=2, col="gray30", label=T)
+
+veganCovEllipse<-function (cov, center = c(0, 0), scale = 1, npoints = 100) 
+{
+  theta <- (0:npoints) * 2 * pi/npoints
+  Circle <- cbind(cos(theta), sin(theta))
+  t(center + scale * t(Circle %*% chol(cov)))
+}
+
+df_ell <- data.frame()
+for(g in factor(NMDS$group)){
+  df_ell <- rbind(df_ell, cbind(as.data.frame(with(NMDS[NMDS$group==g,],
+                                                   veganCovEllipse(pl[[g]]$cov,pl[[g]]$center,pl[[g]]$scale)))
+                                ,group=g))
+}
+
+data.scores <- as.data.frame(scores(data.mds)$sites)
+data.scores$site <- rownames(data.scores)
+data.scores$grp <- data$Treatment
+
+col_vals <- c("All algae" = "yellowgreen", 
+              "No algae" = "turquoise4", 
+              "Only canopy" = "pink",
+              "Only mat" = "coral")
+
+ggplot() + 
+  geom_polygon(data=df_ell, aes( x=NMDS1, y=NMDS2,fill = group),
+    alpha = 0.6) +
+  geom_path(data = df_ell, 
+            aes(x = NMDS1, y = NMDS2,
+                colour = group), size = 1, linetype = 2) +
+  geom_point(data = data.scores,
+             aes(x=NMDS1,y=NMDS2,
+                 colour=grp),
+             size=3) +
+  theme(legend.title = element_blank()) +
+  ylab("NMDS2")+
+  xlab("NMDS1")+
+  #geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +
+  scale_colour_manual(values=col_vals) +
+  scale_fill_manual(values=col_vals)  +
+  theme_light()
 
 
 # ---- MDS plot part 1
@@ -52,7 +108,7 @@ data.mds.scores <- data.mds |>
   fortify() |> 
   mutate(Label = label,
          Score = score) |>
-  full_join(data |> add_rownames(var='Label'))
+  full_join(data[, 1:10] |> add_rownames(var='Label'))
 data.mds.scores.centroids <- data.mds.scores |>
   filter(Score == "sites") |>
   group_by(Treatment) |>
@@ -81,6 +137,7 @@ g <-
 g
 ## ----end
 
+## ANOVA ----
 Xmat <- model.matrix(~-1+Treatment, data=data) #need to dummy code because it's categorical variables
 colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))
 envfit <- envfit(data.mds, env=Xmat)
@@ -115,6 +172,6 @@ g <- ggplot(data = NULL, aes(y=NMDS2, x=NMDS1)) +
 g
 
 
-data.dist <- vegdist(wisconsin(data[,-c(1:4)]^0.25),"bray")
+data.dist <- vegdist(wisconsin(data[,-c(1:10)]^0.25),"bray")
 data.adonis<-adonis2(data.dist~Treatment,  data=data)
 data.adonis
