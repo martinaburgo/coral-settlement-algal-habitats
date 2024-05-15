@@ -17,6 +17,8 @@ library(rstan)
 library(ggforce)
 library(concaveman)
 
+source(file = 'R/functions.R')
+
 # READ DATA ----
 data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
   full_join(read_xlsx(path = 'data/primary/CH3-metadata.xlsx', sheet = 2) |>
@@ -31,6 +33,7 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
                 Sediment, Turf_height, Turf_cover, CCA_cover, Algae_cover, Total) |>
   left_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
               dplyr::filter(Category != "Coral") |>
+              dplyr::filter(Taxa != 'Zooanthids') |>
               dplyr::select(Time, Tile, Taxa, Cover) |>
               mutate(Cover = ifelse(Cover == "+", '0.5', Cover)) |> #adjust rare species 
               mutate(Cover = as.numeric(Cover)) |>
@@ -40,7 +43,12 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
               dplyr::select(-Cover) |>
               tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0)) |>
   dplyr::filter(T1_survey == 'Done') |>
-  dplyr::select(!T1_survey)
+  dplyr::select(!T1_survey) |>
+  mutate(Treatment = ifelse(Treatment == 'No algae', 'Control',
+                            ifelse(Treatment == 'Only canopy', 'Canopy-forming',
+                                   ifelse(Treatment == 'Only mat', 'Mat-forming', Treatment)))) +
+  mutate(Treatment = factor(levels = c('Control', 'Canopy-forming', 'Mat-forming', 'All algae'),
+                            ordered = TRUE))
 
 # MDS ----
 ## MDS Plot ----
@@ -51,59 +59,10 @@ data.mds #check that the stress is <0.2, the dimensions show to what reduction w
 stressplot(data.mds) #N.B. is usually a non linear trend
 ## ----end
 
+data.env.scores <- envfit |>
+  fortify() |> 
+  mutate(Label = label)
 
-## Pretty MDS plot ----
-# from https://forum.posit.co/t/improve-my-nmds-graph-design/106418
-NMDS <-  data.frame(MDS1 = data.mds$points[,1], MDS2 = data.mds$points[,2],
-                    group = data$Treatment)
-
-pl <- ordiellipse(data.mds, 
-                  data$Treatment, 
-                  kind="se", conf=0.95, lwd=2, col="gray30", label=T)
-
-veganCovEllipse<-function (cov, center = c(0, 0), scale = 1, npoints = 100) 
-{
-  theta <- (0:npoints) * 2 * pi/npoints
-  Circle <- cbind(cos(theta), sin(theta))
-  t(center + scale * t(Circle %*% chol(cov)))
-}
-
-df_ell <- data.frame()
-for(g in factor(NMDS$group)){
-  df_ell <- rbind(df_ell, cbind(as.data.frame(with(NMDS[NMDS$group==g,],
-                                                   veganCovEllipse(pl[[g]]$cov,pl[[g]]$center,pl[[g]]$scale)))
-                                ,group=g))
-}
-
-data.scores <- as.data.frame(scores(data.mds)$sites)
-data.scores$site <- rownames(data.scores)
-data.scores$grp <- data$Treatment
-
-col_vals <- c("All algae" = "yellowgreen", 
-              "No algae" = "turquoise4", 
-              "Only canopy" = "pink",
-              "Only mat" = "coral")
-
-ggplot() + 
-  geom_polygon(data=df_ell, aes( x=NMDS1, y=NMDS2,fill = group),
-    alpha = 0.6) +
-  geom_path(data = df_ell, 
-            aes(x = NMDS1, y = NMDS2,
-                colour = group), size = 1, linetype = 2) +
-  geom_point(data = data.scores,
-             aes(x=NMDS1,y=NMDS2,
-                 colour=grp),
-             size=3) +
-  theme(legend.title = element_blank()) +
-  ylab("NMDS2")+
-  xlab("NMDS1")+
-  #geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +
-  scale_colour_manual(values=col_vals) +
-  scale_fill_manual(values=col_vals)  +
-  theme_light()
-
-
-# ---- MDS plot part 1
 data.mds.scores <- data.mds |> 
   fortify() |> 
   mutate(Label = label,
@@ -116,62 +75,54 @@ data.mds.scores.centroids <- data.mds.scores |>
 data.mds.scores <- data.mds.scores |>
   full_join(data.mds.scores.centroids)
 
-g <-
-  ggplot(data = NULL, aes(y=NMDS2, x=NMDS1)) +
-  geom_hline(yintercept=0, linetype='dotted') +
-  geom_vline(xintercept=0, linetype='dotted') +
-  geom_point(data=data.mds.scores %>% filter(Score=='sites'),
-             aes(color=Treatment)) +
-  geom_text(data=data.mds.scores %>% filter(Score=='sites'),
-            aes(label=Label, color=Treatment), hjust=-0.2) +
-  geom_segment(data=data.mds.scores %>% filter(Score=='species'),
-               aes(y=0, x=0, yend=NMDS2, xend=NMDS1),
-               arrow=arrow(length=unit(0.3,'lines')), color='red',
-               alpha =  0.2) +
-  geom_text(data=data.mds.scores %>% filter(Score=='species'),
-            aes(y=NMDS2*1.1, x=NMDS1*1.1, label=Label), color='red',
-            alpha =  0.2) + ggforce::geom_mark_ellipse(data=data.mds.scores %>% filter(Score=='sites'),
-                                                       aes(y=NMDS2, x=NMDS1, fill=Treatment), expand=0) + 
-  geom_segment(data = data.mds.scores,
-               aes(x = NMDS1_c, xend = NMDS1, y = NMDS2_c, yend = NMDS2, colour = Treatment))
-g
-## ----end
+col_vals <- c("All algae" = "#8dd3c7", 
+              "Control" = "#fb8072", 
+              "Canopy-forming" = "#d1a95e",
+              "Mat-forming" = "#a0c58b")
+
+### Supplementary Figure 1 ----
+nMDS_plot <- ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) + 
+    geom_segment(data = data.mds.scores |> filter(Score == 'species'),
+                 aes(y = 0, x = 0, yend = NMDS2, xend = NMDS1), alpha = 0.7) +
+    geom_text_repel(data = data.mds.scores |> filter(Score == 'species'),
+              aes(y = NMDS2*1.1, x = NMDS1*1.1, label=Label), alpha = 0.7) +
+  geom_point(data=data.mds.scores |> 
+               filter(Score=='sites'),
+             aes(color = Treatment, shape = Treatment), size = 2, alpha = 0.6) +
+    ggforce::geom_mark_ellipse(data = data.mds.scores |> 
+                                 filter(Score=='sites'),
+                               aes(y = NMDS2, x = NMDS1, 
+                                   fill = Treatment, 
+                                   colour = Treatment), expand = 0, alpha = 0.2) + 
+    scale_colour_manual(values = col_vals) + scale_fill_manual(values = col_vals) +
+    theme_classic() + theme(legend.position = c(0.9, 0.2))
+nMDS_plot
+
+# save plot
+ggsave(file = paste0(FIGS_PATH, "/supp_fig_1.png"), 
+       plot = nMDS_plot, 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# plot showing just the taxa:
+ggplot() + 
+  geom_segment(data = data.mds.scores |> filter(Score == 'species'),
+               aes(y = 0, x = 0, yend = NMDS2, xend = NMDS1)) +
+  geom_text(data = data.mds.scores |> filter(Score == 'species'),
+            aes(y = NMDS2*1.1, x = NMDS1*1.1, label=Label))  +
+  theme_classic() +
+  ylab("NMDS2") + xlab("NMDS1")
 
 ## ANOVA ----
-Xmat <- model.matrix(~-1+Treatment, data=data) #need to dummy code because it's categorical variables
-colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))
-envfit <- envfit(data.mds, env=Xmat)
-envfit #shows how different each variable is from the centroid, so a significsnt values is whethet that variable is moved from the 'general' community
-
-data.env.scores <- envfit |>
-  fortify() |> 
-  mutate(Label = label)
-
-g <- ggplot(data = NULL, aes(y=NMDS2, x=NMDS1)) +
-  geom_hline(yintercept=0, linetype='dotted') +
-  geom_vline(xintercept=0, linetype='dotted') +
-  geom_point(data=data.mds.scores %>% filter(Score=='sites'),
-             aes(color=Treatment)) +
-  geom_text(data=data.mds.scores %>% filter(Score=='sites'),
-            aes(label=Label, color=Treatment), hjust=-0.2) +
-  geom_segment(data=data.mds.scores %>% filter(Score=='species'),
-               aes(y=0, x=0, yend=NMDS2, xend=NMDS1),
-               arrow=arrow(length=unit(0.3,'lines')), color='red',
-               alpha =  0.2) +
-  geom_text(data=data.mds.scores %>% filter(Score=='species'),
-            aes(y=NMDS2*1.1, x=NMDS1*1.1, label=Label), color='red',
-            alpha =  0.2) + ggforce::geom_mark_ellipse(data=data.mds.scores %>% filter(Score=='sites'),
-                                                       aes(y=NMDS2, x=NMDS1, fill=Treatment), expand=0) + 
-  geom_segment(data = data.mds.scores,
-               aes(x = NMDS1_c, xend = NMDS1, y = NMDS2_c, yend = NMDS2, colour = Treatment)) + 
-  geom_segment(data=data.env.scores,
-               aes(y=0, x=0, yend=NMDS2, xend=NMDS1),
-               arrow=arrow(length=unit(0.3,'lines')), color='blue') +
-  geom_text(data=data.env.scores,
-            aes(y=NMDS2*1.1, x=NMDS1*1.1, label=Label), color='blue')
-g
-
 
 data.dist <- vegdist(wisconsin(data[,-c(1:10)]^0.25),"bray")
 data.adonis<-adonis2(data.dist~Treatment,  data=data)
 data.adonis
+
+
+Xmat <- model.matrix(~-1+Sediment+Turf_height+Algae_cover+CCA_cover, data=data) #need to dummy code because it's categorical variables
+colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))
+envfit <- envfit(data.mds, env=Xmat)
+envfit #shows how different each variable is from the centroid, so a significant values is whether that variable is moved from the 'general' community

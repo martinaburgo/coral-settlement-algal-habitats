@@ -1,3 +1,23 @@
+## ---- preparePaths
+DATA_PATH <<- "data/" # <<- assigns it to the global environment rather than to the local environment
+OUTPUT_PATH <<- "output/"
+FIGS_PATH <<- paste0(OUTPUT_PATH, "figures")
+TABS_PATH <<- paste0(OUTPUT_PATH, "tables")
+
+#paths should be in the global environment so that you can easily use them in every functions
+
+if (!dir.exists(DATA_PATH)) dir.create(DATA_PATH)
+if (!dir.exists(paste0(DATA_PATH,"primary"))) dir.create(paste0(DATA_PATH, "primary"))
+if (!dir.exists(paste0(DATA_PATH,"processed"))) dir.create(paste0(DATA_PATH, "processed"))
+if (!dir.exists(paste0(DATA_PATH,"modelled"))) dir.create(paste0(DATA_PATH, "modelled"))
+if (!dir.exists(paste0(DATA_PATH,"summarised"))) dir.create(paste0(DATA_PATH, "summarised"))
+if (!dir.exists(paste0(DATA_PATH,"workspace"))) dir.create(paste0(DATA_PATH, "workspace"))
+
+if (!dir.exists(OUTPUT_PATH)) dir.create(OUTPUT_PATH)
+if (!dir.exists(FIGS_PATH)) dir.create(FIGS_PATH)
+if (!dir.exists(TABS_PATH)) dir.create(TABS_PATH)
+## ----end
+
 ########################################################
 ########################################################
 # to check priors and posteriors
