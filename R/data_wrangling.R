@@ -25,8 +25,7 @@ data <- data |>
   filter(!is.na(Unbleached)) |>
   mutate(Tile = factor(Tile),
          Treatment = factor(Treatment, levels = c("No algae", "Only mat", "Only canopy", 
-                                                  "All algae"),
-                            ordered = TRUE),
+                                                  "All algae")),
          Grazing = factor(Grazing)) |>
   group_by(Tile) |>
   mutate(Total = sum(Unbleached)) |>
@@ -207,23 +206,30 @@ recruit <- data |>
               select(Tile, Density, Freq_broad)) |>
   mutate(D_broad = Density/Freq_broad) |>
   ungroup() |>
-  select(-Freq_broad) |>
+  select(-Freq_broad)
+
+
+recruit <- recruit |>
   left_join(R_broad |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile)) |>
+              dplyr::select(Tile, R_broad_coral, R_broad_alg)) |> 
   left_join(R_local |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile)) |>
+              dplyr::select(Tile, R_local_coral, R_local_alg)) |> 
   left_join(Shannon_broad_alg |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile))) |> 
   left_join(Shannon_broad_cor |>
               mutate(Tile = factor(Tile))) |>
   left_join(Shannon_local_alg |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile))) |>  
   left_join(Shannon_local_cor |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile))) |> 
   left_join(Tot_broad |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile)) |>
+            dplyr::select(Tot_broad_coral, Tot_broad_alg)) |> 
   left_join(Tot_local |>
-              mutate(Tile = factor(Tile))) |>
+              mutate(Tile = factor(Tile)) |>
+              dplyr::select(Tot_local_coral, Tot_local_alg)) |>
   mutate_all(~replace(., is.na(.), 0)) |>
   left_join(tile_benthos)
 

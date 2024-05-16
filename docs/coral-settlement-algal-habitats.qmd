@@ -89,12 +89,15 @@ source('../R/functions.R')
 knitr::read_chunk('../R/data_analysis.R')
 ```
 
-## Load data
+## Load models
 
 ```{r}
-#| label: loadData
+#| label: loadModels
 
-recruit <- read_csv(file = '../data/processed/recruit.csv', col_select = -1)
+load(file = '../data/modelled/M1_base.RData')
+load(file = '../data/modelled/M2_Height_broad.RData')
+load(file = '../data/modelled/M3_Height_local.RData')
+load(file = '../data/modelled/M4_Density.RData')
 ```
 
 Quick view of dataset:
@@ -114,12 +117,6 @@ recruit |>
   str()
 ```
 :::
-
-```{r}
-recruit <- recruit |>
-  mutate(Treatment = factor(Treatment),
-         Grazing = factor(Grazing, c('No', 'Light', 'Medium', 'Heavy'), ordered = TRUE))
-```
 
 # Exploratory data analysis
 
@@ -164,25 +161,11 @@ scatterplotMatrix(~Total+H_mean_broad+Freq_Sarg_broad+H_mean_local+Freq_Sarg_loc
 recruit |> 
   dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, Shannon_broad_alg, Shannon_broad_cor, Shannon_local_alg, Shannon_local_cor, Tot_broad_alg, Tot_broad_coral, Tot_local_alg, Tot_local_coral) |> cor() |> corrplot()
 ```
-
-## Grazing
-
-```{r}
-#| fig-width: 32
-#| fig-height: 20
-#| echo: false
-
-ggplot(recruit, aes(x = Grazing, fill = Treatment)) + 
-  geom_bar(position = "stack") + theme_classic() +
-  theme(text = element_text(colour = 'black'), 
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.5)),
-        legend.text = element_text(size = rel(1.2)),
-        legend.title = element_text(size = rel(1.5)))
-```
 :::
 
 # Model 1 - Recruits \~ Treatment
+
+Treatments are: T1: Control, all algae were removed T2: Canopy-forming, only canopy-forming macroalgae were left in the plots T3: Mat-forming, only mat-forming macroalgae were left in the plots T4: All algae, the plots were left untouched and presented a mixed macroalgal community
 
 Model formula:
 
@@ -199,6 +182,8 @@ $$
 
 ## Model investigation
 
+![](../output/figures/M1_Treat_fig.png)
+
 ### Output
 
 ```{r}
@@ -211,7 +196,17 @@ $$
 read.delim(file = '../output/tables/M1Output.txt', sep = ',')
 ```
 
-The intercept is 'All algae'. For example, 'No algae' has 2.9x (290%) more recruits than 'All algae'.
+### ROPE
+
+```{r}
+recruit.brm2 |> 
+  emmeans(~Treatment, type = 'link') |>
+  pairs(reverse = TRUE) |>
+  gather_emmeans_draws() |>
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
+```
 
 ### Contrasts
 
@@ -225,12 +220,6 @@ The intercept is 'All algae'. For example, 'No algae' has 2.9x (290%) more recru
 read.delim(file = '../output/tables/M1Contrast.txt', sep = ',')
 ```
 
-Using ROPE (region of practical equivalents), we also couldn't establish if any groups were the same. So apart for Only mat/No algae and Only mat/Only canopy which are statistically different, the others were not different but there's also not enough evidence to say that they're the same.
-
-### Summary figure
-
-![](../output/figures/M1ContrastFig.png)
-
 ## Planned contrasts
 
 We're going to compare specific groups:
@@ -239,15 +228,16 @@ We're going to compare specific groups:
 2.  No algae vs Any algae
 3.  Mat vs Any algae
 4.  No algae vs All algae/Only canopy
+5.  Canopy vs Any algae
 
 To find the groups:
 
-|             | "Mat" vs "Canopy" | No algae vs Any algae | Mat vs Any algae | No algae vs "Canopy" |
-|-----------|-------------|--------------|-------------|-------------|
-| All algae   | -1/2              | -1/3                  | -1/2             | -1/2                 |
-| No algae    | 1/2               | 1                     | 0                | 1                    |
-| Only canopy | -1/2              | -1/3                  | -1/2             | -1/2                 |
-| Only mat    | 1/2               | -1/3                  | 1                | 0                    |
+|     | "Mat" vs "Canopy" | No algae vs Any algae | Mat vs Any algae | No algae vs "Canopy" | Canopy vs Any algae |
+|------------|------------|------------|------------|------------|------------|
+| T1  | 1/2               | 1                     | 0                | 1                    | 0                   |
+| T2  | -1/2              | -1/3                  | -1/2             | -1/2                 | -1                  |
+| T3  | 1/2               | -1/3                  | 1                | 0                    | 1/2                 |
+| T4  | -1/2              | -1/3                  | -1/2             | -1/2                 | 1/2                 |
 
 ```{r}
 #| label: PlannedContrast
@@ -259,7 +249,9 @@ To find the groups:
 read.delim(file = '../output/tables/M1PlannedContrast.txt', sep = ',')
 ```
 
-# M2-3: Recruits \~ *Sargassum* height
+![](../output/figures/M1_Planned_contrast_fig.png)
+
+# M2-3: Recruits \~ *Sargassum* height + Coral richness + Algal richness
 
 ::: panel-tabset
 ## Model 2 - quadrats
@@ -287,9 +279,6 @@ $$
 read.delim(file = '../output/tables/M2Output.txt', sep = ',')
 ```
 
-### Summary figure
-
-![](../output/figures/M2Figure.png)
 
 ## Model 3 - perimeter
 
@@ -316,9 +305,6 @@ $$
 read.delim(file = '../output/tables/M3Output.txt', sep = ',')
 ```
 
-### Summary figure
-
-![](../output/figures/M3Figure.png)
 :::
 
 ## Compare quadrat vs perimeter
@@ -328,7 +314,8 @@ read.delim(file = '../output/tables/M3Output.txt', sep = ',')
 #| eval: false
 ```
 
-There was no difference between the two models
+
+
 
 # Model 4 - Recruits \~ *Sargassum* density
 
@@ -355,11 +342,8 @@ $$
 read.delim(file = '../output/tables/M4Output.txt', sep = ',')
 ```
 
-## Summary figure
 
-![](../output/figures/M4Figure.png)
-
-# Model 7 - Recruits \~ Diversity (quadrats)
+# Model 5 - Recruits \~ Coral Diversity (local)
 
 Model formula:
 
@@ -381,87 +365,11 @@ $$
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M7Output.txt', sep = ',')
+read.delim(file = '../output/tables/M5Output.txt', sep = ',')
 ```
 
-## Summary figure
 
-![](../output/figures/M7Figure.png)
-
-# M12-13: Recruits \~ *Sargassum* cover
-
-::: panel-tabset
-## Model 12 - quadrats
-
-Model formula:
-
-$$
-\begin{align}
-y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
-ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1} &\sim{} \mathcal{N}(20, 30)\\
-\end{align}
-$$
-
-### Output
-
-```{r}
-#| label: M12Output
-#| eval: false
-```
-
-```{r}
-#| echo: false
-read.delim(file = '../output/tables/M12Output.txt', sep = ',')
-```
-
-### Summary figure
-
-![](../output/figures/M12Figure.png)
-
-## Model 13 - perimeter
-
-Model formula:
-
-$$
-\begin{align}
-y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
-ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1} &\sim{} \mathcal{N}(35, 45)\\
-\end{align}
-$$
-
-### Output
-
-```{r}
-#| label: M13Output
-#| eval: false
-```
-
-```{r}
-#| echo: false
-read.delim(file = '../output/tables/M13Output.txt', sep = ',')
-```
-
-### Summary figure
-
-![](../output/figures/M13Figure.png)
-:::
-
-## Compare quadrat vs perimeter
-
-```{r}
-#| label: CompareM12vsM13
-#| eval: false
-```
-
-There was no difference between the two models.
-
-
-
-# Model 14 - Recruits ~ Density + Coral diversity
+# Model 6 - Recruits \~ Algal Diversity (local)
 
 Model formula:
 
@@ -483,6 +391,5 @@ $$
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M14Output.txt', sep = ',')
+read.delim(file = '../output/tables/M6Output.txt', sep = ',')
 ```
-

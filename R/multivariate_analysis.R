@@ -46,9 +46,7 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
   dplyr::select(!T1_survey) |>
   mutate(Treatment = ifelse(Treatment == 'No algae', 'Control',
                             ifelse(Treatment == 'Only canopy', 'Canopy-forming',
-                                   ifelse(Treatment == 'Only mat', 'Mat-forming', Treatment)))) +
-  mutate(Treatment = factor(levels = c('Control', 'Canopy-forming', 'Mat-forming', 'All algae'),
-                            ordered = TRUE))
+                                   ifelse(Treatment == 'Only mat', 'Mat-forming', Treatment))))
 
 # MDS ----
 ## MDS Plot ----
