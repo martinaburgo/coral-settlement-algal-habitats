@@ -19,7 +19,7 @@ tile_benthos <- readxl::read_xlsx(path = "data/primary/CH3-tile-benthos.xlsx", s
          Tile = factor(Tile))
 str(data)
 
-# Data wrangling ----
+# Data wrangling - TILES ----
 # First, declare categorical variables and combine top and bottom recruits as almost no recruits were found on the top of the tiles.
 data <- data |>
   filter(!is.na(Unbleached)) |>
@@ -235,3 +235,111 @@ recruit <- recruit |>
 
 # Save ----
 write.csv(recruit, file = 'data/processed/recruit.csv')
+
+
+# Data wrangling - NATURAL RECRUITMENT ----
+## Load data ----
+corals <- readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence") |>
+  dplyr::select(Habitat, Trip, Period, Transect, Quadrat, Taxa, Interaction, Diameter, Distance, Cover, Height)
+canopy <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-2.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-3.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-4.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-5.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-6.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-7.xlsx", sheet = "Florence"),
+                readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence")) |>
+  dplyr::select(!c(Date, Metre, Taxa, Diameter, Interaction, Distance, Cover)) |>
+  dplyr::filter(!is.na(Thalli))
+
+benthos <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-2.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-3.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-4.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-5.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-6.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-7.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence")) |>
+  dplyr::select(!c(Date))
+
+## Final dataset for benthic analysis----
+
+# Shannon's diversity
+shannon_div <- benthos |>
+  dplyr::filter(Trip == '3' | Trip == '4') |>
+  dplyr::filter(Category == 'Alga') |>
+  dplyr::select(!c(Island, Site, Metre, Category)) |>
+  dplyr::distinct(Habitat, Trip, Transect, Quadrat) |>
+  add_column(benthos |>
+               dplyr::filter(Trip == '3' | Trip == '4') |>
+               dplyr::filter(Category == 'Alga') |>
+               pivot_wider(names_from = Taxa, values_from = Cover, values_fill = 0) |>
+               dplyr::select(!c(Island, Site, Habitat, Period, Trip, 
+                                Transect, Quadrat, Metre, Category)) |>
+               diversity(index = 'shannon') |>
+               as_tibble()) |>
+  rename(Shannon_algae = value) |>
+  group_by(Habitat, Transect, Quadrat) |>
+  summarise(Shannon_algae = mean(Shannon_algae)) |>
+  full_join(benthos |>
+              dplyr::filter(Trip == '3' | Trip == '4') |>
+              dplyr::filter(Category == 'Coral') |> 
+              group_by(Habitat, Trip, Transect, Quadrat, Taxa) |>
+              summarise(Cover = mean(Cover)) |>
+              ungroup() |>
+              dplyr::distinct(Habitat, Trip, Transect, Quadrat) |>
+              add_column(benthos |>
+                           dplyr::filter(Trip == '3' | Trip == '4') |>
+                           dplyr::filter(Category == 'Coral') |> 
+                           group_by(Habitat, Trip, Transect, Quadrat, Taxa) |>
+                           summarise(Cover = mean(Cover)) |>
+                           ungroup() |>
+                           pivot_wider(names_from = Taxa, values_from = Cover, values_fill = 0) |>
+                           dplyr::select(!c(Habitat, Trip, Transect, Quadrat)) |>
+                           diversity(index = 'shannon') |>
+                           as_tibble()) |>
+              rename(Shannon_coral = value) |>
+              group_by(Habitat, Transect, Quadrat) |>
+              summarise(Shannon_coral = mean(Shannon_coral)))  |>
+  mutate(Shannon_algae = ifelse(Shannon_algae == 0, 0.01, Shannon_algae),
+         Shannon_coral = ifelse(Shannon_coral == 0, 0.01, Shannon_coral))
+
+
+# Height and density of the canopy (trip 3 and 4)
+H_D <- benthos |>
+  dplyr::filter(Trip == '3' | Trip == '4') |>
+  dplyr::filter(Taxa == 'Sargassum') |>
+  dplyr::select(Habitat, Trip, Transect, Quadrat, Cover) |>
+  full_join(canopy |>
+              dplyr::filter(Trip == '3' | Trip == '4')) |>
+  mutate(Density = (Thalli/(Cover)*100)) |>
+  dplyr::select(!c(Cover, Island, Site, Height, Thalli, Mean, Max)) |>
+  group_by(Habitat, Transect, Quadrat) |>
+  summarise(Density = mean(Density)) |>
+  ungroup() |>
+  full_join(benthos |>
+              dplyr::filter(Trip == '4') |>
+              dplyr::filter(Taxa == 'Sargassum') |>
+              dplyr::select(Habitat, Trip, Transect, Quadrat, Cover) |>
+              full_join(canopy |>
+                          dplyr::filter(Trip == '4')) |>
+              mutate(Extra_d = (Thalli/(Cover)*100)) |>
+              dplyr::select(!c(Cover, Island, Trip, Period, Site, Height, Thalli, Mean, Max))) |>
+  mutate(Density = ifelse(is.na(Density), Extra_d, Density)) |>
+  dplyr::select(-Extra_d) |>
+  full_join(canopy |>
+              dplyr::filter(Trip == '3' | Trip == '4') |>
+              dplyr::select(!c(Height, Mean)) |>
+              group_by(Habitat, Transect, Quadrat) |>
+              summarise(Height = mean(Max)))
+
+data <- H_D |>
+  full_join(shannon_div) |>
+  right_join(corals |>
+               dplyr::filter(!is.na(Diameter)) |>
+               dplyr::select(Habitat, Transect, Quadrat, Taxa, Diameter)) |>
+  mutate(Shannon_coral = ifelse(is.na(Shannon_coral), 0, Shannon_coral))
+
+# Save dataset ----
+write.csv(data, file = 'data/processed/natural_recruitment.csv')
+
