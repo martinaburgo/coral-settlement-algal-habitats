@@ -44,6 +44,34 @@ benthos <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", sh
 data <- read.csv(file = 'data/processed/natural_recruitment.csv') |>
   dplyr::select(-X)
 
+corals <- corals |>
+  dplyr::filter(!is.na(Diameter))
+
+breaks <- c(0, 5, 20, 50, 100, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
+tags <- c("1-5", "6-20", "21-50", 
+          "51-100", '>100') # specify interval/bin labels
+group_tags <- cut(corals$Diameter, 
+                  breaks = breaks, 
+                  include.lowest = TRUE, 
+                  right = FALSE, 
+                  labels = tags) # bucketing values into bins
+summary(group_tags) # inspect bins
+class_sizes <- factor(group_tags, 
+                      levels = tags,
+                      ordered = TRUE)
+
+breaks <- c(0, 5, 20,  50, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
+tags <- c("1-5", "6-20", '21-50', '>50') # specify interval/bin labels
+group_tags <- cut(corals$Diameter, 
+                  breaks = breaks, 
+                  include.lowest = TRUE, 
+                  right = FALSE, 
+                  labels = tags) # bucketing values into bins
+summary(group_tags) # inspect bins
+class_sizes <- factor(group_tags, 
+                      levels = tags,
+                      ordered = TRUE)
+
 
 # Explore benthic data ----
 ## Benthic data ----
@@ -108,10 +136,37 @@ benthos |>
 
 ### Canopy height ----
 canopy |>
+  mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
   ggplot(aes(x = Trip, y = Mean)) +
-  geom_point() +
   geom_violin(aes(group = Trip)) +
-  facet_grid(~Habitat)
+  facet_wrap(~Habitat)
+
+#### Supp. Fig. ----
+
+canopy |>
+  mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
+  ggplot(aes(y = Mean, x = factor(Trip), color = Habitat)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.02, dodge.width = 0.9),
+             alpha = 0.2) +
+  geom_boxplot(fill = NA) +
+  theme_classic() +
+  theme(legend.position = c(0.9, 0.85),
+        text = element_text(size = 20)) +
+  xlab('Period') +
+  scale_y_continuous(expression(italic(Sargassum)*' height (cm)'))  +
+  scale_x_discrete(breaks = c("1","2","3", "4", "5", "6", "7", "8"),
+                   labels = c("Jul/Aug","Sep/Oct","Nov/Dec", "Jan", "Feb/Mar", "Apr/May", "Jun", "Jul/Aug")) +
+  scale_color_viridis_d(labels = c('Flat' = '0-1 m',
+                                  'Crest' = '2-3 m',
+                                  'Slope' = '4-5 m'),
+                        name = 'Depth')
+
+ggsave(file = paste0(FIGS_PATH, "/SF1_canopy_height.png"), 
+       width = 250, 
+       height = 250/1.6, 
+       units = "mm", 
+       dpi = 300)
+
 
 canopy |> 
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
@@ -131,22 +186,6 @@ corals |>
   geom_point(position = position_jitter(width = 0.2, height = 0.1)) +
   theme_classic()
 
-corals <- corals |>
-  dplyr::filter(!is.na(Diameter))
-
-
-breaks <- c(0, 5, 20, 50, 100, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
-tags <- c("1-5", "6-20", "21-50", 
-          "51-100", '>100') # specify interval/bin labels
-group_tags <- cut(corals$Diameter, 
-                  breaks = breaks, 
-                  include.lowest = TRUE, 
-                  right = FALSE, 
-                  labels = tags) # bucketing values into bins
-summary(group_tags) # inspect bins
-class_sizes <- factor(group_tags, 
-                          levels = tags,
-                          ordered = TRUE)
 
 corals |> 
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
@@ -324,8 +363,6 @@ nat.brm2 |>
   write.table(file = 'output/tables/MN1Output.txt', sep = ",", quote = FALSE, row.names = F)
 
 ## MN2 - Class sizes ----
-### Prep data ----
-
 dat2 <- corals |> 
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
   mutate(class_sizes = factor(group_tags, 
@@ -342,14 +379,7 @@ dat2 <- corals |>
                                '4-5 m')))
 
 
-d.clmm <- ordinal::clmm(class_sizes ~ Mean + (1|Taxa),
-                          data = dat2) #Fit model
-summary(d.clmm)
-emmeans(d.clmm, ~Mean, mode = 'prob') |>
-  pairs()
-
-plot_model(d.clmm, type = 'pred')
-
+### Depth ----
 
 d.clmm2 <- ordinal::clmm(class_sizes ~ Depth + (1|Taxa),
                         data = dat2) #Fit model
@@ -357,32 +387,62 @@ summary(d.clmm2)
 emmeans(d.clmm2, ~Depth, mode = 'mean.class') |>
   pairs()
 
-
-sjPlot::plot_model(d.clmm2, type = 'pred',
-           terms = c('Depth'), 
-           axis.title = c('Depth', 'Probability'),
-           title = "", colors = 'darkgrey', line.size = 1, grid = FALSE) + 
-  theme_bw() +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        text = element_text(size = 24))
-
-
+emmeans(d.clmm2, ~class_sizes|Depth, mode = 'prob') |>
   as.data.frame() |>
-  mutate(across(c(mean.class, asymp.LCL, asymp.UCL), function(x) x-1)) |>
-  ggplot() +
-  geom_hline(yintercept = 1, linetype = 'dashed', size = 0.1) +
-  geom_pointrange(aes(y = mean.class, x = Depth,
-                      ymin = abs(asymp.LCL), ymax = asymp.UCL)) +
-  scale_y_continuous('Effect of macrophyte', breaks = (0:2), labels = c('Negative',
-                                                                        'Neutral',
-                                                                        'Positive'),
-                     limits = c(0, 2), expand = c(0, 0)) +
-  geom_text(mapping = aes(x = coral_stage, y = asymp.UCL, 
-                          label = paste0('n = ', n)),
-            hjust = 0.5, vjust = -1, size = 5) +
-  theme_bw() +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        text = element_text(size = 20)) +
-  scale_x_discrete('Coral life stage')
+  ggplot(aes(y = prob, x = Depth,
+             colour = class_sizes)) +
+  geom_pointrange(aes(ymin = abs(asymp.LCL), ymax = asymp.UCL)) +
+  geom_point() +
+  geom_line(aes(group = class_sizes)) +
+  theme_classic() +
+  theme(legend.position = 'bottom',
+        text = element_text(size = 20)) + labs(colour = 'Coral class size') +
+  ylab('Probability') +
+  scale_color_viridis_d(labels = c('1' = '1-5 cm', 
+                                '2' = '6-20 cm',
+                                '3' = '21-50 cm',
+                                '4' = '>50 cm'), 
+                        option = 'viridis')
+
+ggsave(file = paste0(FIGS_PATH, "/CLMM_depth.png"), 
+       width = 200, 
+       height = 200/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+### Sargassum height ----
+
+d.clmm <- ordinal::clmm(class_sizes ~ Mean + (1|Taxa),
+                        data = dat2) #Fit model
+summary(d.clmm)
+
+
+sjPlot::plot_model(d.clmm, type = 'pred')$data |>
+  as.data.frame() |>
+  ggplot(aes(x = x, y = predicted, colour = response.level, fill = response.level)) +
+  geom_line() +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha = 0.2) +
+  theme_classic() +
+  theme(legend.position = 'bottom',
+        text = element_text(size = 20)) + labs(colour = 'Coral class size') +
+  ylab('Probability') +
+  scale_x_continuous(expression(italic(Sargassum)*' height (cm)')) +
+  scale_color_viridis_d(labels = c('1' = '1-5 cm', 
+                                   '2' = '6-20 cm',
+                                   '3' = '21-50 cm',
+                                   '4' = '>50 cm'), 
+                        option = 'viridis')  +
+  scale_fill_viridis_d(labels = c('1' = '1-5 cm', 
+                                  '2' = '6-20 cm',
+                                  '3' = '21-50 cm',
+                                  '4' = '>50 cm'), 
+                       option = 'viridis') +
+  
+  guides(fill = FALSE)
+
+ggsave(file = paste0(FIGS_PATH, "/CLMM_height.png"), 
+       width = 200, 
+       height = 200/1.6, 
+       units = "mm", 
+       dpi = 300)
+
