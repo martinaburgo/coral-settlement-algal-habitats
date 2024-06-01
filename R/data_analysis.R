@@ -310,9 +310,9 @@ ggsave(file = paste0(FIGS_PATH, "/M1_Planned_contrast_fig.png"),
        dpi = 300)
 
 
-# M2: Recruit ~ H + Coral rich + Algal rich (broad) ----
+# M2: Recruit ~ H (broad) ----
 ## Fit model ----
-form <- bf(Total ~ scale(H_mean_broad) + scale(R_broad_alg) + scale(R_broad_coral) + (1|Turf_height), 
+form <- bf(Total ~ H_mean_broad + (1|Turf_height), 
            family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
@@ -439,8 +439,10 @@ M2Figure <- fit |>
              y = y)) + 
   geom_line() + 
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = recruit, aes(x = H_mean_broad, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1)) +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
-  scale_y_continuous('Total recruits') +
+  scale_y_continuous('Number of coral recruits') +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
         axis.text = element_text(size = rel(1.2)),
@@ -449,9 +451,9 @@ M2Figure <- fit |>
         legend.title = element_text(size = rel(1.5)))
 M2Figure
 
-# M3: Recruit ~ H + Coral rich + Algal rich (local) ----
+# M3: Recruit ~ H (local) ----
 ## Fit model ----
-form <- bf(Total ~ scale(H_mean_local) + scale(R_local_alg) + scale(R_local_coral) + (1|Turf_height), 
+form <- bf(Total ~ H_mean_local + (1|Turf_height), 
            family = poisson(link = 'log'))  
 form |> get_prior(data = recruit)
 
@@ -579,8 +581,11 @@ M3Figure <- fit |>
              y = y)) + 
   geom_line() + 
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = recruit, aes(x = H_mean_local, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1))  +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
-  scale_y_continuous('Total recruits') +
+  scale_y_continuous('Number of coral recruits') +
+  labs(tag = 'a') +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
         axis.text = element_text(size = rel(1.2)),
@@ -589,6 +594,11 @@ M3Figure <- fit |>
         legend.title = element_text(size = rel(1.5)))
 M3Figure
 
+ggsave(file = paste0(FIGS_PATH, "/M3_H_local_fig.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
 
 # Compare ----
 ## ---- CompareM2vsM3
@@ -721,12 +731,15 @@ fit <- recruit.brm8 |>
   as.data.frame()
 
 M4Figure <- fit |> 
-  ggplot(aes(x = D_broad,
+  ggplot(aes(x = D_broad*100,
              y = y)) + 
   geom_line() + 
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
-  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' density'))) +
-  scale_y_continuous('Total recruits') +
+  geom_point(data = recruit, aes(x = D_broad*100, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1))   +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' density (thalli/', m^{2}, ')'))) +
+  scale_y_continuous('Number of coral recruits') +
+  labs(tag = 'b') +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
         axis.text = element_text(size = rel(1.2)),
@@ -734,6 +747,21 @@ M4Figure <- fit |>
         legend.text = element_text(size = rel(1.2)),
         legend.title = element_text(size = rel(1.5)))
 M4Figure
+
+ggsave(file = paste0(FIGS_PATH, "/M4_Density_fig.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# Summary fig (H + D) ----
+M3Figure / M4Figure
+
+ggsave(file = paste0(FIGS_PATH, "/M_H_D_fig.png"), 
+       width = 200/1.2, 
+       height = 200, 
+       units = "mm", 
+       dpi = 300)
 
 # Compare ALL ----
 loo::loo_compare(loo::loo(recruit.brm2),
@@ -783,9 +811,10 @@ recruit.brm8 |>
 
 
 
-# M5: Recruit ~ Coral diversity ----
+# M5: Recruit ~ Diversity (local) ----
 ## Fit model ----
-form <- bf(Total ~ Shannon_local_cor + (1|Turf_height), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(Shannon_local_cor) + scale(Shannon_local_alg) + (1|Turf_height), 
+           family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 20), class = 'Intercept') +
@@ -858,7 +887,7 @@ ggsave(filename = paste0(FIGS_PATH, '/M5DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruit.brm10, form, priors, recruit, file = 'data/modelled/M5_Cor_diversity.RData')
+save(recruit.brm10, form, priors, recruit, file = 'data/modelled/M5_Local_diversity.RData')
 
 ## Investigation ----
 recruit.brm10 |> 
@@ -893,9 +922,10 @@ recruit.brm10 |>
          Pg = round(Pg, 3)) |>
   write.table(file = 'output/tables/M5Output.txt', sep = ",", quote = FALSE, row.names = F)
 
-# M6: Recruit ~ Algal diversity ----
+# M6: Recruit ~ Diversity (broad) ----
 ## Fit model ----
-form <- bf(Total ~ Shannon_local_alg + (1|Turf_height), family = poisson(link = 'log')) 
+form <- bf(Total ~ scale(Shannon_broad_cor) + scale(Shannon_broad_alg) + (1|Turf_height), 
+           family = poisson(link = 'log')) 
 form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 15), class = 'Intercept') +
@@ -968,7 +998,7 @@ ggsave(filename = paste0(FIGS_PATH, '/M6DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruit.brm12, form, priors, recruit, file = 'data/modelled/M6_Alg_diversity.RData')
+save(recruit.brm12, form, priors, recruit, file = 'data/modelled/M6_Broad_diversity.RData')
 
 ## Investigation ----
 recruit.brm12 |> 
@@ -1009,3 +1039,9 @@ loo::loo_compare(loo::loo(recruit.brm10),
                  loo::loo(recruit.brm12))
 ## ----end
 
+
+loo::loo_compare(loo::loo(recruit.brm4),
+                 loo::loo(recruit.brm6),
+                 loo::loo(recruit.brm8),
+                 loo::loo(recruit.brm10),
+                 loo::loo(recruit.brm12))

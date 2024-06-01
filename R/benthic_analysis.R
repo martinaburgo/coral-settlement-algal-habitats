@@ -47,21 +47,8 @@ data <- read.csv(file = 'data/processed/natural_recruitment.csv') |>
 corals <- corals |>
   dplyr::filter(!is.na(Diameter))
 
-breaks <- c(0, 5, 20, 50, 100, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
-tags <- c("1-5", "6-20", "21-50", 
-          "51-100", '>100') # specify interval/bin labels
-group_tags <- cut(corals$Diameter, 
-                  breaks = breaks, 
-                  include.lowest = TRUE, 
-                  right = FALSE, 
-                  labels = tags) # bucketing values into bins
-summary(group_tags) # inspect bins
-class_sizes <- factor(group_tags, 
-                      levels = tags,
-                      ordered = TRUE)
-
-breaks <- c(0, 5, 20,  50, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
-tags <- c("1-5", "6-20", '21-50', '>50') # specify interval/bin labels
+breaks <- c(0, 5, 20,  40, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
+tags <- c("<5", "6-20", '21-40', '>40') # specify interval/bin labels
 group_tags <- cut(corals$Diameter, 
                   breaks = breaks, 
                   include.lowest = TRUE, 
@@ -77,8 +64,8 @@ class_sizes <- factor(group_tags,
 ## Benthic data ----
 # Adjust cover:
 benthos <- benthos |>
-  mutate(Cover = as.numeric(ifelse(Cover == "+", '0.5', 
-                                   ifelse(Cover == '=', '0.5', Cover)))) |>
+  mutate(Cover = as.numeric(ifelse(Cover == "+", '1', 
+                                   ifelse(Cover == '=', '1', Cover)))) |>
   dplyr::filter(!is.na(Cover)) |>
   dplyr::select(!c(Distance, Interaction, Diameter, Height, Thalli)) |>
   group_by(Habitat, Trip, Transect, Quadrat) |>
@@ -132,6 +119,18 @@ benthos |>
   group_by(Habitat) |>
   summarise(mean = mean(mean)) |>
   View()
+
+benthos |>
+  dplyr::filter(Category == 'Alga') |>
+  dplyr::filter(Habitat == 'Crest') |>
+  group_by(Trip, Transect, Taxa) |>
+  summarise(sum = mean(Cover)) |>
+  group_by(Trip, Taxa) |>
+  summarise(mean = mean(sum)) |>
+  ungroup() |>
+  dplyr::filter(Taxa == 'Halymenia' | Taxa == 'Galaxaura' | Taxa == 'Neomeris') |>
+  ggplot(aes(y = mean, x = factor(Trip), fill = Taxa)) +
+  geom_histogram(stat = 'identity')
 
 
 ### Canopy height ----
@@ -258,11 +257,12 @@ ggplot(data = data, aes(Diameter)) +
 
 ## MN1 - Height ----
 # Fit model
-priors <- prior(normal(1, 5), class = 'Intercept') +
-  prior(normal(1, 5), class = 'b') +
-  prior(student_t(3, 0, 3), class = 'sd')
+priors <- prior(normal(3, 2), class = 'Intercept') +
+  prior(normal(0, 1), class = 'b') +
+  prior(student_t(3, 0, 1), class = 'sd')  +
+  prior(student_t(3, 0, 1), class = 'sigma')
 
-form <- bf(Diameter ~ Height + (1|Taxa), family = gaussian()) 
+form <- bf(Diameter ~ log(Height) + (1|Taxa), family = gaussian(link = 'log')) 
 form |>
   get_prior(data = data)
 
@@ -292,6 +292,7 @@ nat.brm2 |>
                           legend.text = element_text(size = rel(1.2)),
                           legend.title = element_text(size = rel(1.5)),
                           legend.position = 'bottom')
+
 ggsave(file = paste0(FIGS_PATH, "/MN1PriorsPosteriors.png"), 
        width = 10,
        height = 8, 
@@ -371,13 +372,14 @@ dat2 <- corals |>
   dplyr::select(Habitat, Transect, Quadrat, Taxa, class_sizes) |>
   left_join(canopy |> 
               mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
-              dplyr::filter(Trip == '3') |>
-              dplyr::select(Habitat, Transect, Quadrat, Mean)) |>
+              dplyr::filter(Trip == '3' | Trip == '2') |>
+              dplyr::select(Habitat, Transect, Trip, Quadrat, Mean) |>
+              group_by(Habitat, Transect, Quadrat) |>
+              summarise(Mean = mean(Mean))) |>
   mutate(across(where(is.numeric), coalesce, 0)) |>
   mutate(Depth = ifelse(Habitat == 'Flat', '0-1 m',
                         ifelse(Habitat == 'Crest', '2-3 m',
                                '4-5 m')))
-
 
 ### Depth ----
 
@@ -398,10 +400,10 @@ emmeans(d.clmm2, ~class_sizes|Depth, mode = 'prob') |>
   theme(legend.position = 'bottom',
         text = element_text(size = 20)) + labs(colour = 'Coral class size') +
   ylab('Probability') +
-  scale_color_viridis_d(labels = c('1' = '1-5 cm', 
+  scale_color_viridis_d(labels = c('1' = '> 5 cm', 
                                 '2' = '6-20 cm',
-                                '3' = '21-50 cm',
-                                '4' = '>50 cm'), 
+                                '3' = '21-40 cm',
+                                '4' = '> 40 cm'), 
                         option = 'viridis')
 
 ggsave(file = paste0(FIGS_PATH, "/CLMM_depth.png"), 
@@ -424,20 +426,15 @@ sjPlot::plot_model(d.clmm, type = 'pred')$data |>
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha = 0.2) +
   theme_classic() +
   theme(legend.position = 'bottom',
-        text = element_text(size = 20)) + labs(colour = 'Coral class size') +
+        text = element_text(size = 20)) + labs(colour = 'Coral class size (cm)') +
   ylab('Probability') +
-  scale_x_continuous(expression(italic(Sargassum)*' height (cm)')) +
-  scale_color_viridis_d(labels = c('1' = '1-5 cm', 
-                                   '2' = '6-20 cm',
-                                   '3' = '21-50 cm',
-                                   '4' = '>50 cm'), 
+  scale_x_continuous(expression('Average '*italic(Sargassum)*' height (cm)')) +
+  scale_color_viridis_d(labels = c('1' = '< 5', 
+                                   '2' = '6-20',
+                                   '3' = '21-40',
+                                   '4' = '> 40'), 
                         option = 'viridis')  +
-  scale_fill_viridis_d(labels = c('1' = '1-5 cm', 
-                                  '2' = '6-20 cm',
-                                  '3' = '21-50 cm',
-                                  '4' = '>50 cm'), 
-                       option = 'viridis') +
-  
+  scale_fill_viridis_d(alpha = 0) +
   guides(fill = FALSE)
 
 ggsave(file = paste0(FIGS_PATH, "/CLMM_height.png"), 

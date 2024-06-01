@@ -98,6 +98,8 @@ load(file = '../data/modelled/M1_base.RData')
 load(file = '../data/modelled/M2_Height_broad.RData')
 load(file = '../data/modelled/M3_Height_local.RData')
 load(file = '../data/modelled/M4_Density.RData')
+load(file = '../data/modelled/M5_Cor_diversity.RData')
+load(file = '../data/modelled/M6_Alg_diversity.RData')
 ```
 
 Quick view of dataset:

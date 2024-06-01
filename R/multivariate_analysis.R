@@ -124,3 +124,15 @@ Xmat <- model.matrix(~-1+Sediment+Turf_height+Algae_cover+CCA_cover, data=data) 
 colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))
 envfit <- envfit(data.mds, env=Xmat)
 envfit #shows how different each variable is from the centroid, so a significant values is whether that variable is moved from the 'general' community
+
+
+# METHODS summaries ----
+data |>
+  dplyr::select(!c(Grazing, Sediment, Turf_height, 
+                   Turf_cover, CCA_cover, Algae_cover, Total, Time)) |>
+  pivot_longer(!c(Tile, Treatment)) |>
+  group_by(Treatment, name) |>
+  summarise(mean = mean(value)) |>
+  dplyr::filter(mean != 0) |>
+  arrange(desc(mean), .by_group = TRUE) |>
+  View()
