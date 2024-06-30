@@ -44,9 +44,9 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
               tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0)) |>
   dplyr::filter(T1_survey == 'Done') |>
   dplyr::select(!T1_survey) |>
-  mutate(Treatment = ifelse(Treatment == 'No algae', 'Control',
+  mutate(Treatment = ifelse(Treatment == 'No algae', 'No macroalgae',
                             ifelse(Treatment == 'Only canopy', 'Canopy-forming',
-                                   ifelse(Treatment == 'Only mat', 'Mat-forming', Treatment))))
+                                   ifelse(Treatment == 'Only mat', 'Understory', 'Mixed-algae community'))))
 
 # MDS ----
 ## MDS Plot ----
@@ -73,10 +73,10 @@ data.mds.scores.centroids <- data.mds.scores |>
 data.mds.scores <- data.mds.scores |>
   full_join(data.mds.scores.centroids)
 
-col_vals <- c("All algae" = "#8dd3c7", 
-              "Control" = "#fb8072", 
+col_vals <- c("Mixed-algae community" = "#8dd3c7", 
+              "No macroalgae" = "#fb8072", 
               "Canopy-forming" = "#d1a95e",
-              "Mat-forming" = "#a0c58b")
+              "Understory" = "#a0c58b")
 
 ### Supplementary Figure 1 ----
 nMDS_plot <- ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) + 
@@ -93,7 +93,7 @@ nMDS_plot <- ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) +
                                    fill = Treatment, 
                                    colour = Treatment), expand = 0, alpha = 0.2) + 
     scale_colour_manual(values = col_vals) + scale_fill_manual(values = col_vals) +
-    theme_classic() + theme(legend.position = c(0.9, 0.2))
+    theme_classic() + theme(legend.position = c(0.85, 0.2))
 nMDS_plot
 
 # save plot

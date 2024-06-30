@@ -1045,3 +1045,69 @@ loo::loo_compare(loo::loo(recruit.brm4),
                  loo::loo(recruit.brm8),
                  loo::loo(recruit.brm10),
                  loo::loo(recruit.brm12))
+
+
+# ZI Model - base ----
+recruit.form <- bf(Total ~ Treatment + (1|Turf_height), 
+                zi ~ 1, 
+                family = zero_inflated_poisson(link = 'log'))
+
+priors <- prior(normal(0.5, 5), class = 'Intercept') +
+  prior(normal(0, 10), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm <- brm(recruit.form, prior = priors, data = recruit, 
+                 sample_prior = 'yes', 
+                 iter = 5000, 
+                 warmup = 2500, 
+                 chains = 3, cores = 3, 
+                 thin = 10, 
+                 control = list(adapt_delta = 0.99, max_treedepth = 20),
+                 refresh = 100, 
+                 backend = 'rstan') 
+
+recruitZI.brm |> SUYR_prior_and_posterior()   +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+(recruitZI.brm$fit |> stan_trace()) + (recruitZI.brm$fit |> stan_ac()) + (recruitZI.brm$fit |> stan_rhat()) + (recruitZI.brm$fit |> stan_ess())
+
+
+recruitZI.brm |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+
+recruitZI.brm |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+recruitZI.brm |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+
+
+recruitZI.brm |> 
+  emmeans(~Treatment, type = 'link') |>
+  pairs(reverse = TRUE) |>
+  gather_emmeans_draws() |> #it's on log scale, so we need to mutate it
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            Pl = mean(Response < 1),
+            Pg = mean(Response > 1))
