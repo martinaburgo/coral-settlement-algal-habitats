@@ -1048,6 +1048,7 @@ loo::loo_compare(loo::loo(recruit.brm4),
 
 
 # ZI Model - base ----
+## Fit ----
 recruit.form <- bf(Total ~ Treatment + (1|Turf_height), 
                 zi ~ 1, 
                 family = zero_inflated_poisson(link = 'log'))
@@ -1060,14 +1061,16 @@ priors <- prior(normal(0.5, 5), class = 'Intercept') +
 recruitZI.brm <- brm(recruit.form, prior = priors, data = recruit, 
                  sample_prior = 'yes', 
                  iter = 5000, 
-                 warmup = 2500, 
+                 warmup = 1000, 
                  chains = 3, cores = 3, 
                  thin = 10, 
                  control = list(adapt_delta = 0.99, max_treedepth = 20),
                  refresh = 100, 
                  backend = 'rstan') 
 
-recruitZI.brm |> SUYR_prior_and_posterior()   +
+## Diagnostics ----
+recruitZI.brm |> 
+  SUYR_prior_and_posterior()   +
   theme_classic() + theme(text = element_text(colour = 'black'), 
                           axis.text = element_text(size = rel(1.2)),
                           axis.title = element_text(size = rel(1.5)),
@@ -1075,11 +1078,23 @@ recruitZI.brm |> SUYR_prior_and_posterior()   +
                           legend.title = element_text(size = rel(1.5)),
                           legend.position = 'bottom')
 
-(recruitZI.brm$fit |> stan_trace()) + (recruitZI.brm$fit |> stan_ac()) + (recruitZI.brm$fit |> stan_rhat()) + (recruitZI.brm$fit |> stan_ess())
+ggsave(file = paste0(FIGS_PATH, "/MZI1PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
 
+recruitZI.brm$fit |> stan_trace()
+recruitZI.brm$fit |> stan_ac()
+recruitZI.brm$fit |> stan_rhat()
+recruitZI.brm$fit |> stan_ess()
 
 recruitZI.brm |> 
   pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI1PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
 
 ### Residuals
 recruit.resids <- make_brms_dharma_res(recruitZI.brm, integerResponse = FALSE)
@@ -1088,11 +1103,24 @@ plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 
 testDispersion(recruit.resids)
 
+ggsave(filename = paste0(FIGS_PATH, '/MZI1DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
 
+## Save model ----
+save(recruitZI.brm, recruit.form, priors, recruit, file = 'data/modelled/MZI1_base.RData')
+
+## Investigation ----
 recruitZI.brm |> 
   conditional_effects() |> 
   plot(points = TRUE)
 
+### Output ----
+### ---- MZI1Output
 recruitZI.brm |>
   brms::as_draws_df() |>
   mutate(across(everything(), exp)) |>
@@ -1101,8 +1129,26 @@ recruitZI.brm |>
                   rhat, length, ess_bulk, ess_tail,
                   Pl = ~mean(.x < 1),
                   Pg = ~mean(.x > 1))
+### ----end
 
+recruitZI.brm |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/MZI1Output.txt', sep = ",", quote = FALSE, row.names = F)
 
+### Contrast ----
+### ---- MZI1Contrast
 recruitZI.brm |> 
   emmeans(~Treatment, type = 'link') |>
   pairs(reverse = TRUE) |>
@@ -1111,3 +1157,841 @@ recruitZI.brm |>
   summarise(median_hdci(Response),
             Pl = mean(Response < 1),
             Pg = mean(Response > 1))
+### ----end
+
+recruitZI.brm |> 
+  emmeans(~Treatment, type = 'link') |>
+  pairs(reverse = TRUE) |>
+  gather_emmeans_draws() |> #it's on log scale, so we need to mutate it
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            Pl = mean(Response < 1),
+            Pg = mean(Response > 1)) |>
+  write.table(file = 'output/tables/MZI1Contrast.txt', sep = ",", quote = FALSE, row.names = F)
+
+### ROPE ----
+recruitZI.brm |> 
+  emmeans(~Treatment, type = 'link') |>
+  pairs(reverse = TRUE) |>
+  gather_emmeans_draws() |>
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
+
+
+### Figure ----
+recruit.em <- recruitZI.brm |> 
+  emmeans(~Treatment, type = 'link') |>
+  pairs() |>
+  gather_emmeans_draws() |>
+  mutate(Fit = exp(.value))
+
+MZI1ContrastFig <- recruit.em |> 
+  ggplot(aes(x = Fit)) +
+  geom_density_ridges_gradient(aes(y = contrast, fill = stat(x)),
+                               alpha = 0.4, color = 'white', 
+                               quantile_lines = TRUE,
+                               quantiles = c(0.025, 0.975)) + 
+  geom_vline(xintercept = 1, linetype = 'dashed') + 
+  scale_fill_viridis_c(option = 'C') + 
+  scale_x_continuous('', trans = scales::log_trans())  + 
+  scale_y_discrete('') +
+  theme_classic() +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'none')
+MZI1ContrastFig
+
+## Further investigation ----
+
+### ---- ZIPlannedContrast
+cmat <- cbind('Mat_Canopy' = c(1/2, -1/2, 1/2, -1/2),
+              'NoAlg_AnyAlg' = c(1, -1/3, -1/3, -1/3),
+              'Mat_AnyAlg' = c(0, -1/2, 1, -1/2),
+              'NoAlg_Canopy' = c(1, -1/2, 0, -1/2))
+recruitZI.brm |>
+  emmeans(~Treatment, type = 'link') |>
+  contrast(method = list(Treatment = cmat)) |>
+  gather_emmeans_draws() |>
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            Pl = mean(Response < 1),
+            Pg = mean(Response > 1),
+            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
+### ----end
+
+
+recruitZI.brm |>
+  emmeans(~Treatment, type = 'link') |>
+  contrast(method = list(Treatment = cmat)) |>
+  gather_emmeans_draws() |>
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            Pl = mean(Response < 1),
+            Pg = mean(Response > 1)) |>
+  write.table(file = 'output/tables/MZI1PlannedContrast.txt', sep = ",", quote = FALSE, row.names = F)
+
+# in the actual number of recruits:
+recruitZI.brm |> 
+  emmeans(~Treatment) |>
+  regrid() |> #turns values onto the response scale, so that pairs() which is for contrasts, is on the response scale
+  pairs(reverse = TRUE) |>
+  gather_emmeans_draws() |>
+  summarise(median_hdci(.value))
+
+## Summary figures ----
+
+# Estimated number of recruits and their CI
+recruitZI.brm |> 
+  emmeans(~Treatment, type = 'response') |>
+  as.tibble() |>
+  ggplot(aes(x = Treatment, y = rate)) +
+  geom_pointrange(aes(ymin = lower.HPD, ymax = upper.HPD)) +
+  theme_classic() +
+  ylab('Number of coral recruits') +
+  geom_point(data = recruit, aes(x = Treatment, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1))
+
+ggsave(file = paste0(FIGS_PATH, "/MZI1_Treat_fig.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# Planned contrasts figure
+recruitZI.brm |>
+  emmeans(~Treatment, type = 'link') |>
+  contrast(method = list(Treatment = cmat)) |>
+  gather_emmeans_draws() |>
+  mutate(Response = exp(.value)) |> 
+  ggplot(aes(x = Response)) +
+  geom_density_ridges_gradient(aes(y = contrast, fill = stat(x)),
+                               alpha = 0.4, color = 'white', 
+                               quantile_lines = TRUE,
+                               quantiles = c(0.025, 0.975)) + 
+  geom_vline(xintercept = 1, linetype = 'dashed') + 
+  scale_fill_viridis_c(option = 'C') + 
+  scale_x_continuous('', trans = scales::log2_trans())  + 
+  scale_y_discrete('') +
+  theme_classic() +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'none')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI1_Planned_contrast_fig.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# MZI2: Recruit ~ H (broad) ----
+## Fit model ----
+recruit.form <- bf(Total ~ H_mean_broad + (1|Turf_height), 
+           zi ~ 1, 
+           family = zero_inflated_poisson(link = 'log'))
+recruit.form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 5), class = 'Intercept') +
+  prior(normal(5, 6), class = 'b')  +
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm2 <- brm(recruit.form, prior = priors, data = recruit, 
+                    sample_prior = 'yes', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+## Diagnostics ----
+recruitZI.brm2 |> 
+  SUYR_prior_and_posterior() +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI2PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm2$fit |> stan_trace()
+recruitZI.brm2$fit |> stan_ac()
+recruitZI.brm2$fit |> stan_rhat()
+recruitZI.brm2$fit |> stan_ess()
+
+## Model validation
+### Posterior probability check
+recruitZI.brm2 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI2PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm2, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI2DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm2, recruit.form, priors, recruit, file = 'data/modelled/MZI2_Height_broad.RData')
+
+## Investigation ----
+recruitZI.brm2 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI2Output
+recruitZI.brm2 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruitZI.brm2 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/MZI2Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(H_mean_broad = seq(min(H_mean_broad),
+                                        max(H_mean_broad),
+                                        len = 50)))
+fit <- recruitZI.brm2 |> 
+  emmeans(~H_mean_broad, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(H_mean_broad) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+MZI2Figure <- fit |> 
+  ggplot(aes(x = H_mean_broad,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = recruit, aes(x = H_mean_broad, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1)) +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
+  scale_y_continuous('Number of coral recruits') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+MZI2Figure
+
+
+# MZI3: Recruit ~ H (local) ----
+## Fit model ----
+recruit.form <- bf(Total ~ H_mean_local + (1|Turf_height), 
+           zi ~ 1, 
+           family = zero_inflated_poisson(link = 'log'))
+recruit.form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 5), class = 'Intercept') +
+  prior(normal(6, 8), class = 'b') + 
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm3 <- brm(recruit.form, prior = priors, data = recruit, 
+                      sample_prior = 'yes', 
+                      iter = 5000, 
+                      warmup = 1000, 
+                      chains = 3, cores = 3, 
+                      control = list(adapt_delta = 0.99, 
+                                     max_treedepth = 20), 
+                      thin = 5, 
+                      refresh = 0, 
+                      backend = 'rstan') 
+
+## Diagnostics ----
+recruitZI.brm3 |> 
+  SUYR_prior_and_posterior()  +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI3PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm3$fit |> stan_trace()
+recruitZI.brm3$fit |> stan_ac()
+recruitZI.brm3$fit |> stan_rhat()
+recruitZI.brm3$fit |> stan_ess()
+
+
+## Model validation
+### Posterior probability check
+recruitZI.brm3 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI3PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm3, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI3DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm3, recruit.form, priors, recruit, file = 'data/modelled/MZI3_Height_local.RData')
+
+## Investigation ----
+recruitZI.brm3 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI3Output
+recruitZI.brm3 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruitZI.brm3 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/MZI3Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(H_mean_local = seq(min(H_mean_local),
+                                        max(H_mean_local),
+                                        len = 50)))
+fit <- recruitZI.brm3 |> 
+  emmeans(~H_mean_local, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(H_mean_local) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+MZI3Figure <- fit |> 
+  ggplot(aes(x = H_mean_local,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = recruit, aes(x = H_mean_local, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1))  +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
+  scale_y_continuous('Number of coral recruits') +
+  labs(tag = 'a') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+MZI3Figure
+
+ggsave(file = paste0(FIGS_PATH, "/MZI3_H_local_fig.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# Compare ----
+## ---- CompareMZI2vsMZI3
+loo::loo_compare(loo::loo(recruitZI.brm2),
+                 loo::loo(recruitZI.brm3))
+## ----end
+
+
+# MZI4: Recruit ~ Density ----
+## Fit model ----
+recruit.form <- bf(Total ~ D_broad + (1|Turf_height), 
+                   zi ~ 1, 
+                   family = zero_inflated_poisson(link = 'log'))
+recruit.form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 20), class = 'Intercept') +
+  prior(normal(1, 3), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd')  +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm4 <- brm(recruit.form, prior = priors, data = recruit, 
+                    sample_prior = 'yes', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+## Diagnostics ----
+recruitZI.brm4 |> 
+  SUYR_prior_and_posterior()   +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI4PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm4$fit |> stan_trace()
+recruitZI.brm4$fit |> stan_ac()
+recruitZI.brm4$fit |> stan_rhat()
+recruitZI.brm4$fit |> stan_ess()
+
+## Model validation
+### Posterior probability check
+recruitZI.brm4 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI4PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm4, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI4DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm4, recruit.form, priors, recruit, file = 'data/modelled/MZI4_Density.RData')
+
+## Investigation ----
+recruitZI.brm4 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI4Output
+recruitZI.brm4 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruitZI.brm4 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/MZI4Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+### Figure ----
+newdata <- with(recruit,
+                list(D_broad = seq(min(D_broad),
+                                   max(D_broad),
+                                   len = 50)))
+fit <- recruitZI.brm4 |> 
+  emmeans(~D_broad, at = newdata) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(D_broad) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame()
+
+MZI4Figure <- fit |> 
+  ggplot(aes(x = D_broad*100,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = recruit, aes(x = D_broad*100, y = Total), alpha = 0.4,
+             position = position_jitter(width = 0.1, height = 0.1))   +
+  scale_x_continuous(name = expression(paste(italic('Sargassum'), ' density (thalli/', m^{2}, ')'))) +
+  scale_y_continuous('Number of coral recruits') +
+  labs(tag = 'b') +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+MZI4Figure
+
+ggsave(file = paste0(FIGS_PATH, "/MZI4_Density_fig.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# Summary fig (H + D) ----
+MZI3Figure / MZI4Figure
+
+ggsave(file = paste0(FIGS_PATH, "/MZI_H_D_fig.png"), 
+       width = 200/1.2, 
+       height = 200, 
+       units = "mm", 
+       dpi = 300)
+
+# Compare ALL ----
+loo::loo_compare(loo::loo(recruitZI.brm),
+                 loo::loo(recruitZI.brm2),
+                 loo::loo(recruitZI.brm3),
+                 loo::loo(recruitZI.brm4))
+
+# Thresholds ----
+recruitZI.brm2 |> 
+  emmeans(~H_mean_broad, at = with(recruit,
+                                   list(H_mean_broad = seq(min(H_mean_broad),
+                                                           max(H_mean_broad),
+                                                           len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(H_mean_broad),
+            Pl = mean(H_mean_broad < 1),
+            Pg = mean(H_mean_broad > 1))
+
+recruitZI.brm3 |> 
+  emmeans(~H_mean_local, at = with(recruit,
+                                   list(H_mean_local = seq(min(H_mean_local),
+                                                           max(H_mean_local),
+                                                           len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(H_mean_local),
+            Pl = mean(H_mean_local < 1),
+            Pg = mean(H_mean_local > 1))
+
+recruitZI.brm4 |> 
+  emmeans(~D_broad, at = with(recruit,
+                              list(D_broad = seq(min(D_broad),
+                                                 max(D_broad),
+                                                 len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  filter(.value > 0) |>
+  ungroup() |>
+  summarise(median_hdci(D_broad),
+            Pl = mean(D_broad < 1),
+            Pg = mean(D_broad > 1))
+
+# MZI5: Recruit ~ Diversity (local) ----
+## Fit model ----
+recruit.form <- bf(Total ~ scale(Shannon_local_cor) + scale(Shannon_local_alg) + (1|Turf_height), 
+           zi ~ 1, 
+           family = zero_inflated_poisson(link = 'log'))
+recruit.form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 20), class = 'Intercept') +
+  prior(normal(1, 5), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm5 <- brm(recruit.form, prior = priors, data = recruit, 
+                    sample_prior = 'yes', 
+                    iter = 5000, 
+                    warmup = 1000, 
+                    chains = 3, cores = 3, 
+                    control = list(adapt_delta = 0.99, 
+                                   max_treedepth = 20), 
+                    thin = 5, 
+                    refresh = 0, 
+                    backend = 'rstan') 
+
+## Diagnostics ----
+recruitZI.brm5 |> 
+  SUYR_prior_and_posterior()   +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI5PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm5$fit |> stan_trace()
+recruitZI.brm5$fit |> stan_ac()
+recruitZI.brm5$fit |> stan_rhat()
+recruitZI.brm5$fit |> stan_ess()
+
+## Model validation
+### Posterior probability check
+recruitZI.brm5 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI5PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm5, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI5DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm5, recruit.form, priors, recruit, file = 'data/modelled/MZI5_Local_diversity.RData')
+
+## Investigation ----
+recruitZI.brm5 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI5Output
+recruitZI.brm5 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruitZI.brm5 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/MZI5Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# MZI6: Recruit ~ Diversity (broad) ----
+## Fit model ----
+recruit.form <- bf(Total ~ scale(Shannon_broad_cor) + scale(Shannon_broad_alg) + (1|Turf_height), 
+           zi ~ 1, 
+           family = zero_inflated_poisson(link = 'log'))
+recruit.form |> get_prior(data = recruit)
+
+priors <- prior(normal(0.5, 15), class = 'Intercept') +
+  prior(normal(1, 10), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm6 <- brm(recruit.form, prior = priors, data = recruit, 
+                     sample_prior = 'yes', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20), 
+                     thin = 5, 
+                     refresh = 0, 
+                     backend = 'rstan') 
+
+## Diagnostics ----
+recruitZI.brm6 |> 
+  SUYR_prior_and_posterior()   +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI6PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm6$fit |> stan_trace()
+recruitZI.brm6$fit |> stan_ac()
+recruitZI.brm6$fit |> stan_rhat()
+recruitZI.brm6$fit |> stan_ess()
+
+## Model validation
+### Posterior probability check
+recruitZI.brm6 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI6PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm6, integerResponse = FALSE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI6DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm6, recruit.form, priors, recruit, file = 'data/modelled/MZI6_Broad_diversity.RData')
+
+## Investigation ----
+recruitZI.brm6 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI6Output
+recruitZI.brm6 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+recruitZI.brm6 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  mutate(median = round(median, 3),
+         lower = round(lower, 3),
+         upper = round(upper, 3),
+         rhat = round(rhat, 3),
+         Pl = round(Pl, 3),
+         Pg = round(Pg, 3)) |>
+  write.table(file = 'output/tables/MZI6Output.txt', sep = ",", quote = FALSE, row.names = F)
+
+# Compare ----
+## ---- CompareMZI5vsMZI6
+loo::loo_compare(loo::loo(recruitZI.brm5),
+                 loo::loo(recruitZI.brm6))
+## ----end
+
+
+loo::loo_compare(loo::loo(recruitZI.brm2),
+                 loo::loo(recruitZI.brm3),
+                 loo::loo(recruitZI.brm4),
+                 loo::loo(recruitZI.brm5),
+                 loo::loo(recruitZI.brm6))
