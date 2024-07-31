@@ -80,6 +80,10 @@ recruit.brm |>
   conditional_effects() |> 
   plot(points = TRUE)
 
+recruit.brm |> 
+  ggeffects::ggemmeans(~TREAT) |> 
+  plot(add.data = TRUE)
+
 recruit.brm2 <- recruit.brm |>
   update(sample_prior = 'yes')
 
@@ -116,7 +120,8 @@ ggsave(file = paste0(FIGS_PATH, "/M1PPCheck.png"),
        dpi = 300)
 
 ### Residuals
-recruit.resids <- make_brms_dharma_res(recruit.brm2, integerResponse = FALSE)
+recruit.resids <- make_brms_dharma_res(recruit.brm2, 
+                                       integerResponse = TRUE)
 testUniformity(recruit.resids)
 plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 
@@ -1047,14 +1052,15 @@ loo::loo_compare(loo::loo(recruit.brm4),
                  loo::loo(recruit.brm12))
 
 
-# ZI Model - base ----
+# MZI1 - base ----
+
 ## Fit ----
 recruit.form <- bf(Total ~ Treatment + (1|Turf_height), 
                 zi ~ 1, 
                 family = zero_inflated_poisson(link = 'log'))
 
-priors <- prior(normal(0.5, 5), class = 'Intercept') +
-  prior(normal(0, 10), class = 'b') +
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(0, 8), class = 'b') +
   prior(student_t(3, 0, 3), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
@@ -1069,6 +1075,11 @@ recruitZI.brm <- brm(recruit.form, prior = priors, data = recruit,
                  backend = 'rstan') 
 
 ## Diagnostics ----
+
+recruitZI.brm |>
+  conditional_effects() |>
+  plot(points = TRUE)
+
 recruitZI.brm |> 
   SUYR_prior_and_posterior()   +
   theme_classic() + theme(text = element_text(colour = 'black'), 
@@ -1087,6 +1098,7 @@ recruitZI.brm$fit |> stan_trace()
 recruitZI.brm$fit |> stan_ac()
 recruitZI.brm$fit |> stan_rhat()
 recruitZI.brm$fit |> stan_ess()
+recruitZI.brm$fit |> stan_dens(separate_chains = TRUE)
 
 recruitZI.brm |> 
   pp_check(type = 'dens_overlay', ndraws = 100)
@@ -1097,7 +1109,8 @@ ggsave(file = paste0(FIGS_PATH, "/MZI1PPCheck.png"),
        dpi = 300)
 
 ### Residuals
-recruit.resids <- make_brms_dharma_res(recruitZI.brm, integerResponse = FALSE)
+recruit.resids <- make_brms_dharma_res(recruitZI.brm, 
+                                       integerResponse = TRUE)
 testUniformity(recruit.resids)
 plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 
@@ -1205,6 +1218,24 @@ MZI1ContrastFig <- recruit.em |>
         legend.position = 'none')
 MZI1ContrastFig
 
+recruitZI.brm |> 
+  emmeans(~Treatment) |>
+  pairs() |>
+  tidy_draws() |> 
+  exp() |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |>
+  as.data.frame() |>
+  ggplot(aes(y = variable, x = median)) +
+  geom_vline(xintercept = 1, linetype = 'dashed') +
+  geom_pointrange(aes(xmin = lower, xmax = upper)) +
+  scale_x_continuous("Effect size", 
+                     trans = scales::log2_trans(),
+                     labels = function(x) 100 * (x-1)) + # so it's simmetrical around 1
+  theme_classic()
+
 ## Further investigation ----
 
 ### ---- ZIPlannedContrast
@@ -1290,6 +1321,24 @@ ggsave(file = paste0(FIGS_PATH, "/MZI1_Planned_contrast_fig.png"),
        units = "mm", 
        dpi = 300)
 
+recruitZI.brm |>
+  emmeans(~Treatment, type = 'link') |>
+  contrast(method = list(TREAT = cmat)) |>
+  gather_emmeans_draws() |>
+  mutate(Fit = exp(.value)) |>
+  ggplot() +
+  geom_vline(xintercept = 1, linetype = 'dashed') +
+  stat_slab(aes(x = Fit, y = contrast,
+                fill = stat(ggdist::cut_cdf_qi(cdf,
+                                               .width = c(0.5, 0.8, 0.95), 
+                                               labels = scales::percent_format())
+                )), color = 'black') +
+  scale_fill_brewer('Interval', direction  =  -1, na.translate = FALSE) +
+  scale_x_continuous('Effect', trans = scales::log2_trans()) +
+  #scale_y_discrete('', breaks = c('TREAT.NB_S', 'TREAT.Alg2_Alg1', 'TREAT.Alg_NB', 'TREAT.Alg_Bare'),labels = c('Nat. Bare vs Scapped', 'Algae 1 vs 2', 'Algae vs Nat. Bare', 'Algae vs Bare')) +
+  theme_classic()
+
+
 # MZI2: Recruit ~ H (broad) ----
 ## Fit model ----
 recruit.form <- bf(Total ~ H_mean_broad + (1|Turf_height), 
@@ -1298,7 +1347,7 @@ recruit.form <- bf(Total ~ H_mean_broad + (1|Turf_height),
 recruit.form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 5), class = 'Intercept') +
-  prior(normal(5, 6), class = 'b')  +
+  prior(normal(0, 8), class = 'b')  +
   prior(student_t(3, 0, 3), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
@@ -1309,8 +1358,8 @@ recruitZI.brm2 <- brm(recruit.form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     control = list(adapt_delta = 0.99, 
                                    max_treedepth = 20), 
-                    thin = 5, 
-                    refresh = 0, 
+                    thin = 10, 
+                    refresh = 100, 
                     backend = 'rstan') 
 
 ## Diagnostics ----
@@ -1345,7 +1394,8 @@ ggsave(file = paste0(FIGS_PATH, "/MZI2PPCheck.png"),
        dpi = 300)
 
 ### Residuals
-recruit.resids <- make_brms_dharma_res(recruitZI.brm2, integerResponse = FALSE)
+recruit.resids <- make_brms_dharma_res(recruitZI.brm2, 
+                                       integerResponse = TRUE)
 testUniformity(recruit.resids)
 plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 
@@ -1360,7 +1410,8 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI2DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm2, recruit.form, priors, recruit, file = 'data/modelled/MZI2_Height_broad.RData')
+save(recruitZI.brm2, recruit.form, priors, recruit, 
+     file = 'data/modelled/MZI2_Height_broad.RData')
 
 ## Investigation ----
 recruitZI.brm2 |> 
@@ -1434,7 +1485,7 @@ recruit.form <- bf(Total ~ H_mean_local + (1|Turf_height),
 recruit.form |> get_prior(data = recruit)
 
 priors <- prior(normal(0.5, 5), class = 'Intercept') +
-  prior(normal(6, 8), class = 'b') + 
+  prior(normal(0, 8), class = 'b') + 
   prior(student_t(3, 0, 3), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
@@ -1445,7 +1496,7 @@ recruitZI.brm3 <- brm(recruit.form, prior = priors, data = recruit,
                       chains = 3, cores = 3, 
                       control = list(adapt_delta = 0.99, 
                                      max_treedepth = 20), 
-                      thin = 5, 
+                      thin = 10, 
                       refresh = 0, 
                       backend = 'rstan') 
 
@@ -1583,8 +1634,8 @@ recruit.form <- bf(Total ~ D_broad + (1|Turf_height),
                    family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 20), class = 'Intercept') +
-  prior(normal(1, 3), class = 'b') +
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b') +
   prior(student_t(3, 0, 3), class = 'sd')  +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
@@ -1595,7 +1646,7 @@ recruitZI.brm4 <- brm(recruit.form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     control = list(adapt_delta = 0.99, 
                                    max_treedepth = 20), 
-                    thin = 5, 
+                    thin = 10, 
                     refresh = 0, 
                     backend = 'rstan') 
 
@@ -1631,7 +1682,8 @@ ggsave(file = paste0(FIGS_PATH, "/MZI4PPCheck.png"),
        dpi = 300)
 
 ### Residuals
-recruit.resids <- make_brms_dharma_res(recruitZI.brm4, integerResponse = FALSE)
+recruit.resids <- make_brms_dharma_res(recruitZI.brm4, 
+                                       integerResponse = TRUE)
 testUniformity(recruit.resids)
 plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 
@@ -1780,8 +1832,8 @@ recruit.form <- bf(Total ~ scale(Shannon_local_cor) + scale(Shannon_local_alg) +
            family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 20), class = 'Intercept') +
-  prior(normal(1, 5), class = 'b') +
+priors <- prior(normal(0.5, 10), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b') +
   prior(student_t(3, 0, 3), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
@@ -1792,7 +1844,7 @@ recruitZI.brm5 <- brm(recruit.form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     control = list(adapt_delta = 0.99, 
                                    max_treedepth = 20), 
-                    thin = 5, 
+                    thin = 10, 
                     refresh = 0, 
                     backend = 'rstan') 
 
@@ -1828,7 +1880,8 @@ ggsave(file = paste0(FIGS_PATH, "/MZI5PPCheck.png"),
        dpi = 300)
 
 ### Residuals
-recruit.resids <- make_brms_dharma_res(recruitZI.brm5, integerResponse = FALSE)
+recruit.resids <- make_brms_dharma_res(recruitZI.brm5, 
+                                       integerResponse = TRUE)
 testUniformity(recruit.resids)
 plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 
@@ -1885,8 +1938,8 @@ recruit.form <- bf(Total ~ scale(Shannon_broad_cor) + scale(Shannon_broad_alg) +
            family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 15), class = 'Intercept') +
-  prior(normal(1, 10), class = 'b') +
+priors <- prior(normal(0.5, 8), class = 'Intercept') +
+  prior(normal(0, 8), class = 'b') +
   prior(student_t(3, 0, 3), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
@@ -1897,7 +1950,7 @@ recruitZI.brm6 <- brm(recruit.form, prior = priors, data = recruit,
                      chains = 3, cores = 3, 
                      control = list(adapt_delta = 0.99, 
                                     max_treedepth = 20), 
-                     thin = 5, 
+                     thin = 10, 
                      refresh = 0, 
                      backend = 'rstan') 
 
@@ -1933,7 +1986,8 @@ ggsave(file = paste0(FIGS_PATH, "/MZI6PPCheck.png"),
        dpi = 300)
 
 ### Residuals
-recruit.resids <- make_brms_dharma_res(recruitZI.brm6, integerResponse = FALSE)
+recruit.resids <- make_brms_dharma_res(recruitZI.brm6, 
+                                       integerResponse = TRUE)
 testUniformity(recruit.resids)
 plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
 plotResiduals(recruit.resids, quantreg = TRUE) 

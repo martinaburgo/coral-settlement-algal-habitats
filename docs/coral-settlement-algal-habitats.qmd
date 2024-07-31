@@ -94,12 +94,12 @@ knitr::read_chunk('../R/data_analysis.R')
 ```{r}
 #| label: loadModels
 
-load(file = '../data/modelled/M1_base.RData')
-load(file = '../data/modelled/M2_Height_broad.RData')
-load(file = '../data/modelled/M3_Height_local.RData')
-load(file = '../data/modelled/M4_Density.RData')
-load(file = '../data/modelled/M5_Cor_diversity.RData')
-load(file = '../data/modelled/M6_Alg_diversity.RData')
+load(file = '../data/modelled/MZI1_base.RData')
+load(file = '../data/modelled/MZI2_Height_broad.RData')
+load(file = '../data/modelled/MZI3_Height_local.RData')
+load(file = '../data/modelled/MZI4_Density.RData')
+load(file = '../data/modelled/MZI5_Local_diversity.RData')
+load(file = '../data/modelled/MZI6_Broad_diversity.RData')
 ```
 
 Quick view of dataset:
@@ -126,8 +126,8 @@ recruit |>
 ## Treatment
 
 ```{r}
-#| fig-width: 8
-#| fig-height: 5
+#| fig-width: 6
+#| fig-height: 4
 #| echo: false
 
 recruit |> 
@@ -167,7 +167,15 @@ recruit |>
 
 # Model 1 - Recruits \~ Treatment
 
-Treatments are: T1: Control, all algae were removed T2: Canopy-forming, only canopy-forming macroalgae were left in the plots T3: Mat-forming, only mat-forming macroalgae were left in the plots T4: All algae, the plots were left untouched and presented a mixed macroalgal community
+Treatments are:
+
+1.  T1: Control, all algae were removed
+
+2.  T2: Canopy-forming, only canopy-forming macroalgae were left in the plots
+
+3.  T3: Mat-forming, only mat-forming macroalgae were left in the plots
+
+4.   T4: All algae, the plots were left untouched and presented a mixed macroalgal community
 
 Model formula:
 
@@ -184,7 +192,7 @@ $$
 
 ## Model investigation
 
-![](../output/figures/M1_Treat_fig.png)
+![Fig 1](../output/figures/M1_Treat_fig.png)
 
 ### Output
 
@@ -281,7 +289,6 @@ $$
 read.delim(file = '../output/tables/M2Output.txt', sep = ',')
 ```
 
-
 ## Model 3 - perimeter
 
 Model formula:
@@ -306,7 +313,6 @@ $$
 #| echo: false
 read.delim(file = '../output/tables/M3Output.txt', sep = ',')
 ```
-
 :::
 
 ## Compare quadrat vs perimeter
@@ -315,9 +321,6 @@ read.delim(file = '../output/tables/M3Output.txt', sep = ',')
 #| label: CompareM2vsM3
 #| eval: false
 ```
-
-
-
 
 # Model 4 - Recruits \~ *Sargassum* density
 
@@ -344,8 +347,7 @@ $$
 read.delim(file = '../output/tables/M4Output.txt', sep = ',')
 ```
 
-
-# Model 5 - Recruits \~ Coral Diversity (local)
+# Model 5 - Recruits \~ Diversity (local)
 
 Model formula:
 
@@ -370,8 +372,7 @@ $$
 read.delim(file = '../output/tables/M5Output.txt', sep = ',')
 ```
 
-
-# Model 6 - Recruits \~ Algal Diversity (local)
+# Model 6 - Recruits \~ Diversity (broad)
 
 Model formula:
 
