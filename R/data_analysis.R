@@ -47,7 +47,7 @@ recruit |>
         legend.title = element_text(size = rel(1.5))) +
   scale_y_continuous(name = 'Total recruits', n.breaks = 3)
 
-# correlation plot
+# correlation plot - change to scatterplot
 recruit |> 
   dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, 
                 R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, 
@@ -1340,8 +1340,10 @@ recruitZI.brm |>
 
 
 # MZI2: Recruit ~ H (broad) ----
+recruit |> dplyr::filter(H_mean_broad != 0) |> dplyr::select(H_mean_broad) |> min()/2
+
 ## Fit model ----
-recruit.form <- bf(Total ~ H_mean_broad + (1|Turf_height), 
+recruit.form <- bf(Total ~ log(H_mean_broad + 2.2) + (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
@@ -1478,8 +1480,10 @@ MZI2Figure
 
 
 # MZI3: Recruit ~ H (local) ----
+recruit |> dplyr::filter(H_mean_local != 0) |> dplyr::select(H_mean_local) |> min()/2
+
 ## Fit model ----
-recruit.form <- bf(Total ~ H_mean_local + (1|Turf_height), 
+recruit.form <- bf(Total ~ log(H_mean_local + 2) + (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
@@ -1628,8 +1632,10 @@ loo::loo_compare(loo::loo(recruitZI.brm2),
 
 
 # MZI4: Recruit ~ Density ----
+recruit |> dplyr::filter(D_broad != 0) |> dplyr::select(D_broad) |> min()/2
+
 ## Fit model ----
-recruit.form <- bf(Total ~ D_broad + (1|Turf_height), 
+recruit.form <- bf(Total ~ log(D_broad + 0.3) + (1|Turf_height), 
                    zi ~ 1, 
                    family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
@@ -1826,8 +1832,11 @@ recruitZI.brm4 |>
             Pg = mean(D_broad > 1))
 
 # MZI5: Recruit ~ Diversity (local) ----
+recruit |> dplyr::filter(Shannon_local_cor != 0) |> dplyr::select(Shannon_local_cor) |> min()/2
+recruit |> dplyr::filter(Shannon_local_alg != 0) |> dplyr::select(Shannon_local_alg) |> min()/2
+
 ## Fit model ----
-recruit.form <- bf(Total ~ scale(Shannon_local_cor) + scale(Shannon_local_alg) + (1|Turf_height), 
+recruit.form <- bf(Total ~ scale(log(Shannon_local_cor + 0.04)) + scale(log(Shannon_local_alg + 0.01)) + (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
@@ -1932,8 +1941,12 @@ recruitZI.brm5 |>
   write.table(file = 'output/tables/MZI5Output.txt', sep = ",", quote = FALSE, row.names = F)
 
 # MZI6: Recruit ~ Diversity (broad) ----
+recruit |> dplyr::filter(Shannon_broad_alg != 0) |> dplyr::select(Shannon_broad_alg) |> min()/2
+
 ## Fit model ----
-recruit.form <- bf(Total ~ scale(Shannon_broad_cor) + scale(Shannon_broad_alg) + (1|Turf_height), 
+recruit.form <- bf(Total ~ scale(Shannon_broad_cor) + 
+                     scale(log(Shannon_broad_alg + 0.03)) + 
+                     (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 recruit.form |> get_prior(data = recruit)
@@ -2049,3 +2062,213 @@ loo::loo_compare(loo::loo(recruitZI.brm2),
                  loo::loo(recruitZI.brm4),
                  loo::loo(recruitZI.brm5),
                  loo::loo(recruitZI.brm6))
+
+# MZI7 - Broad model ----
+recruit |> dplyr::filter(H_mean_broad != 0) |> dplyr::select(H_mean_broad) |> min()/2
+recruit |> dplyr::filter(D_broad != 0) |> dplyr::select(D_broad) |> min()/2
+recruit |> dplyr::filter(R_broad_coral != 0) |> dplyr::select(R_broad_coral) |> min()/2
+recruit |> dplyr::filter(R_broad_alg != 0) |> dplyr::select(R_broad_alg) |> min()/2
+
+## Fit ----
+recruit.form <- bf(Total ~ scale(log(H_mean_broad + 2.2)) + scale(log(D_broad + 0.3)) + 
+                     scale(log(R_broad_coral + 0.5)) + scale(log(R_broad_alg + 0.5)) + 
+                     (1|Turf_height), 
+                   zi ~ 1, 
+                   family = zero_inflated_poisson(link = 'log'))
+
+priors <- prior(normal(0.5, 2), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm7p <- brm(recruit.form, prior = priors, data = recruit, 
+                     sample_prior = 'only', 
+                     iter = 5000, 
+                     warmup = 1000, 
+                     chains = 3, cores = 3, 
+                     thin = 10, 
+                     control = list(adapt_delta = 0.99, 
+                                    max_treedepth = 20),
+                     refresh = 100, 
+                     backend = 'rstan') 
+
+recruitZI.brm7p |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+recruitZI.brm7 <- recruitZI.brm7p |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruitZI.brm7 |> 
+  SUYR_prior_and_posterior()   +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI7PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm7$fit |> stan_trace()
+recruitZI.brm7$fit |> stan_ac()
+recruitZI.brm7$fit |> stan_rhat()
+recruitZI.brm7$fit |> stan_ess()
+
+## Model validation
+### Posterior probability check
+recruitZI.brm7 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI7PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm7, 
+                                       integerResponse = TRUE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI7DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm7, recruit.form, priors, recruit, file = 'data/modelled/MZI7_Broad_model.RData')
+
+## Investigation ----
+recruitZI.brm7 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI7Output
+recruitZI.brm7 |>
+  brms::as_draws_df() |>
+  mutate(across(everything(), exp)) |>
+  dplyr::select(starts_with('b_')) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
+
+# MZI8 - Local model ----
+recruit |> dplyr::filter(H_mean_local != 0) |> dplyr::select(H_mean_local) |> min()/2
+recruit |> dplyr::filter(D_broad != 0) |> dplyr::select(D_broad) |> min()/2
+recruit |> dplyr::filter(R_local_coral != 0) |> dplyr::select(R_local_coral) |> min()/2
+recruit |> dplyr::filter(R_local_alg != 0) |> dplyr::select(R_local_alg) |> min()/2
+
+## Fit ----
+recruit.form <- bf(Total ~ scale(log(H_mean_local + 2)) + scale(log(D_broad + 0.3)) + 
+                     scale(log(R_local_coral + 0.5)) + scale(log(R_local_alg + 0.5)) + 
+                     (1|Turf_height), 
+                   zi ~ 1, 
+                   family = zero_inflated_poisson(link = 'log'))
+
+priors <- prior(normal(0.5, 2), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b') +
+  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
+
+recruitZI.brm8p <- brm(recruit.form, prior = priors, data = recruit, 
+                       sample_prior = 'only', 
+                       iter = 5000, 
+                       warmup = 1000, 
+                       chains = 3, cores = 3, 
+                       thin = 10, 
+                       control = list(adapt_delta = 0.99, 
+                                      max_treedepth = 20),
+                       refresh = 100, 
+                       backend = 'rstan') 
+
+recruitZI.brm8p |> 
+  conditional_effects() |> 
+  plot(points = TRUE, ask = FALSE)
+
+recruitZI.brm8 <- recruitZI.brm8p |>
+  update(sample_prior = 'yes')
+
+## Diagnostics ----
+recruitZI.brm8 |> 
+  SUYR_prior_and_posterior()   +
+  theme_classic() + theme(text = element_text(colour = 'black'), 
+                          axis.text = element_text(size = rel(1.2)),
+                          axis.title = element_text(size = rel(1.5)),
+                          legend.text = element_text(size = rel(1.2)),
+                          legend.title = element_text(size = rel(1.5)),
+                          legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI8PriorsPosteriors.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## MCMC Sampling diagnostics
+recruitZI.brm8$fit |> stan_trace()
+recruitZI.brm8$fit |> stan_ac()
+recruitZI.brm8$fit |> stan_rhat()
+recruitZI.brm8$fit |> stan_ess()
+
+## Model validation
+### Posterior probability check
+recruitZI.brm8 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MZI8PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(recruitZI.brm8, 
+                                       integerResponse = TRUE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, form = factor(rep(1, nrow(recruit))))
+plotResiduals(recruit.resids, quantreg = TRUE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MZI8DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids, 
+                                      form = factor(rep(1, nrow(recruit))))) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+## Save model ----
+save(recruitZI.brm8, recruit.form, priors, recruit, file = 'data/modelled/MZI8_Local_model.RData')
+
+## Investigation ----
+recruitZI.brm8 |> 
+  conditional_effects() |> 
+  plot(points = TRUE)
+
+### Output ----
+### ---- MZI8Output
+recruitZI.brm8 |>
+  as_draws_df() |>
+  exp() |>
+  as.data.frame() |>
+  dplyr::select(starts_with('b_')) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat, length, ess_bulk, ess_tail,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+### ----end
