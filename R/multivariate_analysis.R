@@ -44,9 +44,11 @@ data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
               tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0)) |>
   dplyr::filter(T1_survey == 'Done') |>
   dplyr::select(!T1_survey) |>
-  mutate(Treatment = ifelse(Treatment == 'No algae', 'No macroalgae',
-                            ifelse(Treatment == 'Only canopy', 'Canopy-forming',
-                                   ifelse(Treatment == 'Only mat', 'Understory', 'Mixed-algae community'))))
+  mutate(Treatment = ifelse(Treatment == 'No algae', 'T1',
+                            ifelse(Treatment == 'Only canopy', 'T2',
+                                   ifelse(Treatment == 'Only mat', 'T3', 
+                                          'T4'))))
+#write.csv(data, file = 'data/processed/multivariate_data.csv')
 
 # MDS ----
 ## MDS Plot ----
@@ -73,10 +75,10 @@ data.mds.scores.centroids <- data.mds.scores |>
 data.mds.scores <- data.mds.scores |>
   full_join(data.mds.scores.centroids)
 
-col_vals <- c("Mixed-algae community" = "#8dd3c7", 
-              "No macroalgae" = "#fb8072", 
-              "Canopy-forming" = "#d1a95e",
-              "Understory" = "#a0c58b")
+col_vals <- c("T4" = "#8dd3c7", 
+              "T1" = "#fb8072", 
+              "T2" = "#d1a95e",
+              "T3" = "#a0c58b")
 
 ### Supplementary Figure 1 ----
 nMDS_plot <- ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) + 
@@ -113,12 +115,11 @@ ggplot() +
   theme_classic() +
   ylab("NMDS2") + xlab("NMDS1")
 
-## ANOVA ----
-
+## ---- ANOVA
 data.dist <- vegdist(wisconsin(data[,-c(1:10)]^0.25),"bray")
 data.adonis<-adonis2(data.dist~Treatment,  data=data)
 data.adonis
-
+## ----end
 
 Xmat <- model.matrix(~-1+Sediment+Turf_height+Algae_cover+CCA_cover, data=data) #need to dummy code because it's categorical variables
 colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))

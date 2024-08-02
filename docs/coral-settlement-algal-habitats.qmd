@@ -30,8 +30,8 @@ format:
     highlight-style: zenburn
     ## Execution
     execute:
-      echo: true
-      cache: true
+      echo: false
+      cache: false
     ## Rendering
     embed-resources: true
 crossref:
@@ -87,6 +87,7 @@ library(ggridges)
 
 source('../R/functions.R')
 knitr::read_chunk('../R/data_analysis.R')
+knitr::read_chunk('../R/multivariate_analysis.R')
 ```
 
 ## Load models
@@ -102,30 +103,30 @@ load(file = '../data/modelled/MZI5_Local_diversity.RData')
 load(file = '../data/modelled/MZI6_Broad_diversity.RData')
 ```
 
+## Load data
+```{r}
+#| label: loadData
+data <- read.csv('../data/processed/multivariate_data.csv')[,-1]
+```
+
+
 Quick view of dataset:
 
-::: panel-tabset
-## Top rows
-
 ```{r}
+#| echo: false
+#| label: quickView
+
 recruit |> 
+  dplyr::select(Total, Treatment, H_mean_broad, H_mean_local,
+                D_broad, Shannon_local_cor, Shannon_local_alg,
+                Shannon_broad_cor, Shannon_broad_alg, Turf_height) |>
   head()
 ```
 
-## Structure
-
-```{r}
-recruit |>
-  str()
-```
-:::
-
 # Exploratory data analysis
 
-::: panel-tabset
-## Treatment
-
 ```{r}
+#| label: EDA
 #| fig-width: 6
 #| fig-height: 4
 #| echo: false
@@ -143,29 +144,7 @@ recruit |>
   scale_y_continuous(name = 'Total recruits', n.breaks = 3)
 ```
 
-## Scatterplot
-
-```{r}
-#| echo: false
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-scatterplotMatrix(~Total+H_mean_broad+Freq_Sarg_broad+H_mean_local+Freq_Sarg_local+D_broad+R_broad_alg+R_broad_coral+R_local_alg+R_local_coral+Shannon_broad_alg+Shannon_broad_cor+Shannon_local_alg+Shannon_local_cor+Tot_broad_alg+Tot_broad_coral+Tot_local_alg+Tot_local_coral, 
-                  data = recruit, diagonal = list(method = 'boxplot'))
-```
-
-## Correlation
-
-```{r}
-#| echo: false
-#| fig-width: 10
-#| fig-height: 10
-recruit |> 
-  dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, Shannon_broad_alg, Shannon_broad_cor, Shannon_local_alg, Shannon_local_cor, Tot_broad_alg, Tot_broad_coral, Tot_local_alg, Tot_local_coral) |> cor() |> corrplot()
-```
-:::
-
-# Model 1 - Recruits \~ Treatment
+# Treatments
 
 Treatments are:
 
@@ -177,6 +156,20 @@ Treatments are:
 
 4.   T4: All algae, the plots were left untouched and presented a mixed macroalgal community
 
+![nMDS Plot: ](../output/figures/supp_fig_1.png)
+
+```{r ANOVA}
+#| results: markup
+#| eval: true
+
+```
+
+The nDMS plot and the ANOVA show that treatments are different.
+
+
+# Model 1 - Recruits \~ Treatment
+
+
 Model formula:
 
 $$
@@ -184,41 +177,38 @@ $$
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 log(\lambda_i) &= \beta_0 + \beta X + \gamma _j\\
 \gamma_j \sim{} \mathcal{N}(\sigma, \sigma_1^2)\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 5)\\
-\beta_{1,2,3} &\sim{} \mathcal{N}(0,10)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1,2,3} &\sim{} \mathcal{N}(0,8)\\
 \sigma_1 \sim{} \mathcal{t}(3, 0, 3)\\
 \end{align}
 $$
+```{r MZI1Fit}
+#| eval: false
+
+```
+
+
+## Model diagnostics
+![](../output/figures/MZI1PriorsPosteriors.png)
+- looks good
+
+![](../output/figures/M1ZIMCMC.png)
+
+- model converged and chains are well mixed
+
+![](../output/figures/MZI1DHARMa.png)
+
+Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
+
 
 ## Model investigation
 
 ![Fig 1](../output/figures/M1_Treat_fig.png)
 
-### Output
-
-```{r}
-#| label: M1Output
-#| eval: false
-```
-
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M1Output.txt', sep = ',')
+read.delim(file = '../output/tables/MZI1Output.txt', sep = ',')
 ```
-
-### ROPE
-
-```{r}
-recruit.brm2 |> 
-  emmeans(~Treatment, type = 'link') |>
-  pairs(reverse = TRUE) |>
-  gather_emmeans_draws() |>
-  mutate(Response = exp(.value)) |>
-  summarise(median_hdci(Response),
-            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
-```
-
-### Contrasts
 
 ```{r}
 #| label: M1Contrast
@@ -227,7 +217,17 @@ recruit.brm2 |>
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M1Contrast.txt', sep = ',')
+read.delim(file = '../output/tables/MZI1Contrast.txt', sep = ',')
+```
+
+```{r}
+recruitZI.brm |> 
+  emmeans(~Treatment, type = 'link') |>
+  pairs(reverse = TRUE) |>
+  gather_emmeans_draws() |>
+  mutate(Response = exp(.value)) |>
+  summarise(median_hdci(Response),
+            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
 ```
 
 ## Planned contrasts
@@ -256,10 +256,10 @@ To find the groups:
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M1PlannedContrast.txt', sep = ',')
+read.delim(file = '../output/tables/MZI1PlannedContrast.txt', sep = ',')
 ```
 
-![](../output/figures/M1_Planned_contrast_fig.png)
+![](../output/figures/MZI1_Planned_contrast_fig.png)
 
 # M2-3: Recruits \~ *Sargassum* height + Coral richness + Algal richness
 
