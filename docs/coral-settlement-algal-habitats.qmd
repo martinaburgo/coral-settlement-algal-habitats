@@ -30,7 +30,7 @@ format:
     highlight-style: zenburn
     ## Execution
     execute:
-      echo: false
+      echo: true
       cache: false
     ## Rendering
     embed-resources: true
@@ -106,9 +106,11 @@ load(file = '../data/modelled/MZI6_Broad_diversity.RData')
 ## Load data
 ```{r}
 #| label: loadData
-data <- read.csv('../data/processed/multivariate_data.csv')[,-1]
+data <- read.csv('../data/processed/multivariate_data.csv')[,-1] #for treatment ANOVA
 ```
 
+
+# Coral recruitment on settlement tiles
 
 Quick view of dataset:
 
@@ -123,7 +125,7 @@ recruit |>
   head()
 ```
 
-# Exploratory data analysis
+## Exploratory data analysis
 
 ```{r}
 #| label: EDA
@@ -133,7 +135,7 @@ recruit |>
 
 recruit |> 
   ggplot(aes(y = Total, x = Treatment)) +
-  geom_violin() +
+  geom_boxplot() +
   geom_point(color = 'black') + 
   theme_classic() +
   theme(text = element_text(colour = 'black'), 
@@ -144,9 +146,43 @@ recruit |>
   scale_y_continuous(name = 'Total recruits', n.breaks = 3)
 ```
 
-# Treatments
+```{r}
+#| label: scatterPlotEDA
+#| warning: false
+#| fig-width: 6
+#| fig-height: 4
+#| echo: false
 
-Treatments are:
+scatterplotMatrix(~Total+H_mean_broad + H_mean_local + D_broad + Shannon_broad_alg + Shannon_broad_cor + Shannon_local_alg + Shannon_local_cor, data = recruit, diagonal = list(method = 'boxplot'))
+
+```
+We will log all variables apart from Shannon_broad_cor. However, as some values are 0 and we can't log zeros, we'll add a constant to each variable. The constant will be half of the smallest value of each variable. If we'd select a very small value as constant, we could artificially an outlier.
+
+Check how correlated the variables are between them:
+```{r}
+#| label: checkCorrVariables
+#| warning: false
+
+vif(lm(Total ~ log(H_mean_broad + 2.2) + log(H_mean_local + 2) + log(D_broad + 0.3) + log(Shannon_broad_alg + 0.03) + Shannon_broad_cor + log(Shannon_local_alg + 0.01) + log(Shannon_local_cor + 0.04), data = recruit))
+```
+As expected, they're very correlated. To adjust for collinearity, we'll fit separate models.
+
+For community diversity: we can pair algal diversity and coral diversity  and build one model for broad and one for local diversity:
+```{r}
+#| label: correlationShannonBroad
+
+vif(lm(Total ~ log(Shannon_broad_alg + 0.03) + Shannon_broad_cor, data = recruit))
+```
+```{r}
+#| label: correlationShannonLocal
+
+vif(lm(Total ~ log(Shannon_local_alg + 0.01) + log(Shannon_local_cor + 0.04), data = recruit))
+```
+
+
+## Treatment effectiveness
+
+The treatments are:
 
 1.  T1: Control, all algae were removed
 
@@ -154,9 +190,9 @@ Treatments are:
 
 3.  T3: Mat-forming, only mat-forming macroalgae were left in the plots
 
-4.   T4: All algae, the plots were left untouched and presented a mixed macroalgal community
+4.  T4: All algae, the plots were left untouched and presented a mixed macroalgal community
 
-![nMDS Plot: ](../output/figures/supp_fig_1.png)
+![nMDS Plot:Multivariate ordination plot of the different macroalgal treatments based on Bray-Curtis dissimilarity matrix. The coloured dot s are the positions of individual quadrats within each treatment. The vectors (black lines) show the relationship between benthic taxa and their contribution (indicated by their length) to the position of the quadrats in multivariate space. Coral taxa were excluded from this analysis as they were present in all plots.](../output/figures/supp_fig_1.png)
 
 ```{r ANOVA}
 #| results: markup
@@ -166,9 +202,7 @@ Treatments are:
 
 The nDMS plot and the ANOVA show that treatments are different.
 
-
-# Model 1 - Recruits \~ Treatment
-
+## M1 - Recruits \~ Treatment
 
 Model formula:
 
@@ -178,76 +212,84 @@ y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 log(\lambda_i) &= \beta_0 + \beta X + \gamma _j\\
 \gamma_j \sim{} \mathcal{N}(\sigma, \sigma_1^2)\\
 \beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
-\beta_{1,2,3} &\sim{} \mathcal{N}(0,8)\\
-\sigma_1 \sim{} \mathcal{t}(3, 0, 3)\\
+\beta_{1,2,3} &\sim{} \mathcal{N}(0,5)\\
+\sigma_1 \sim{} \mathcal{t}(3, 0, 2)\\
 \end{align}
 $$
+
 ```{r MZI1Fit}
 #| eval: false
 
 ```
 
+### Model diagnostics
 
-## Model diagnostics
-![](../output/figures/MZI1PriorsPosteriors.png)
+![](../output/figures/MZI1PriorsPosteriors.png) 
+
 - looks good
 
 ![](../output/figures/M1ZIMCMC.png)
 
-- model converged and chains are well mixed
+-   model converged and chains are well mixed
 
 ![](../output/figures/MZI1DHARMa.png)
 
 Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
 
+![](../output/figures/MZI1PPCheck.png)
 
-## Model investigation
 
-![Fig 1](../output/figures/M1_Treat_fig.png)
+### Model investigation
 
-```{r}
-#| echo: false
-read.delim(file = '../output/tables/MZI1Output.txt', sep = ',')
-```
+![Fig 1: Predicted median number of coral recruits among different macroalgal treatments. The bars indicate the HDCI. The grey points are the observed number of recruits.](../output/figures/M1_Treat_fig.png)
 
-```{r}
-#| label: M1Contrast
-#| eval: false
-```
+Summary:
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/MZI1Contrast.txt', sep = ',')
+read.delim(file = '../output/tables/MZI1Output.txt', sep = ',') |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
 
+Contrast by treatment:
+
 ```{r}
+#| echo: false
+read.delim(file = '../output/tables/MZI1Contrast.txt', sep = ',') |>
+  mutate(across(where(is.numeric), ~round(., 2)))
+```
+
+ROPE:
+
+```{r}
+#| echo: false
+
 recruitZI.brm |> 
   emmeans(~Treatment, type = 'link') |>
   pairs(reverse = TRUE) |>
   gather_emmeans_draws() |>
   mutate(Response = exp(.value)) |>
   summarise(median_hdci(Response),
-            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
+            ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage) |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
 
-## Planned contrasts
 
-We're going to compare specific groups:
+For planned contrasts, we're going to compare specific groups:
 
 1.  No algae/Only mat vs All algae/Only canopy
 2.  No algae vs Any algae
 3.  Mat vs Any algae
 4.  No algae vs All algae/Only canopy
-5.  Canopy vs Any algae
 
 To find the groups:
 
-|     | "Mat" vs "Canopy" | No algae vs Any algae | Mat vs Any algae | No algae vs "Canopy" | Canopy vs Any algae |
-|------------|------------|------------|------------|------------|------------|
-| T1  | 1/2               | 1                     | 0                | 1                    | 0                   |
-| T2  | -1/2              | -1/3                  | -1/2             | -1/2                 | -1                  |
-| T3  | 1/2               | -1/3                  | 1                | 0                    | 1/2                 |
-| T4  | -1/2              | -1/3                  | -1/2             | -1/2                 | 1/2                 |
+|     | "Mat" vs "Canopy" | No algae vs Any algae | Mat vs Any algae | No algae vs "Canopy" |
+|------------|------------|------------|------------|------------|
+| T1  | 1/2               | 1                     | 0                | 1                    |
+| T2  | -1/2              | -1/3                  | -1/2             | -1/2                 |
+| T3  | 1/2               | -1/3                  | 1                | 0                    |
+| T4  | -1/2              | -1/3                  | -1/2             | -1/2                 |
 
 ```{r}
 #| label: PlannedContrast
@@ -256,15 +298,16 @@ To find the groups:
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/MZI1PlannedContrast.txt', sep = ',')
+read.delim(file = '../output/tables/MZI1PlannedContrast.txt', sep = ',') |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
 
-![](../output/figures/MZI1_Planned_contrast_fig.png)
+![](../output/figures/MZI1_Planned_contrast_fig2.png)
 
-# M2-3: Recruits \~ *Sargassum* height + Coral richness + Algal richness
+## M2-3: Recruits \~ *Sargassum* height
 
 ::: panel-tabset
-## Model 2 - quadrats
+### M2 - quadrats
 
 Model formula:
 
@@ -272,24 +315,42 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1} &\sim{} \mathcal{N}(6,5)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1} &\sim{} \mathcal{N}(0,5)\\
 \end{align}
 $$
-
-### Output
-
-```{r}
-#| label: M2Output
+```{r MZI2Fit}
 #| eval: false
+
 ```
+
+#### Model diagnostics
+
+![](../output/figures/MZI2PriorsPosteriors.png) 
+
+- looks good
+
+![](../output/figures/M2ZIMCMC.png)
+
+-   model converged and chains are well mixed
+
+![](../output/figures/MZI2DHARMa.png)
+
+Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
+
+![](../output/figures/MZI2PPCheck.png)
+
+
+
+#### Model output
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M2Output.txt', sep = ',')
+read.delim(file = '../output/tables/MZI2Output.txt', sep = ',') |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
 
-## Model 3 - perimeter
+### M3 - perimeter
 
 Model formula:
 
@@ -297,32 +358,47 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1} &\sim{} \mathcal{N}(6,8)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1} &\sim{} \mathcal{N}(0,5)\\
 \end{align}
 $$
 
-### Output
+#### Model diagnostics
 
-```{r}
-#| label: M3Output
-#| eval: false
-```
+![](../output/figures/MZI3PriorsPosteriors.png) 
+
+- looks good
+
+![](../output/figures/M3ZIMCMC.png)
+
+-   model converged and chains are well mixed
+
+![](../output/figures/MZI3DHARMa.png)
+
+Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
+
+![](../output/figures/MZI3PPCheck.png)
+
+
+#### Model output
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M3Output.txt', sep = ',')
+read.delim(file = '../output/tables/MZI3Output.txt', sep = ',') |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
 :::
 
-## Compare quadrat vs perimeter
+### Compare quadrat vs perimeter
 
 ```{r}
-#| label: CompareM2vsM3
-#| eval: false
+#| label: CompareMZI2vsMZI3
+#| warning: false
 ```
 
-# Model 4 - Recruits \~ *Sargassum* density
+- no difference
+
+## M4 - Recruits \~ *Sargassum* density
 
 Model formula:
 
@@ -330,24 +406,47 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1} &\sim{} \mathcal{N}(1,3)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1} &\sim{} \mathcal{N}(0,5)\\
 \end{align}
 $$
 
-## Output
+### Model diagnostics
 
-```{r}
-#| label: M4Output
-#| eval: false
-```
+![](../output/figures/MZI4PriorsPosteriors.png) 
+
+- looks good
+
+![](../output/figures/M4ZIMCMC.png)
+
+-   model converged and chains are well mixed
+
+![](../output/figures/MZI4DHARMa.png)
+
+Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
+
+![](../output/figures/MZI4PPCheck.png)
+
+
+
+### Model output
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M4Output.txt', sep = ',')
+read.delim(file = '../output/tables/MZI4Output.txt', sep = ',')
 ```
 
-# Model 5 - Recruits \~ Diversity (local)
+## Compare height vs density
+### Compare quadrat vs perimeter
+
+```{r}
+#| label: CompareMZI3vsMZI4
+#| warning: false
+```
+
+- no difference
+
+## M5 - Recruits \~ Diversity (local)
 
 Model formula:
 
@@ -355,24 +454,38 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1,2} &\sim{} \mathcal{N}(1,2)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1,2} &\sim{} \mathcal{N}(0,5)\\
 \end{align}
 $$
 
-## Output
+### Model diagnostics
 
-```{r}
-#| label: M7Output
-#| eval: false
-```
+![](../output/figures/MZI5PriorsPosteriors.png) 
+
+- looks good
+
+![](../output/figures/M5ZIMCMC.png)
+
+-   model converged and chains are well mixed
+
+![](../output/figures/MZI5DHARMa.png)
+
+Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
+
+![](../output/figures/MZI5PPCheck.png)
+
+
+
+### Model output
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M5Output.txt', sep = ',')
+read.delim(file = '../output/tables/MZI5Output.txt', sep = ',')  |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
 
-# Model 6 - Recruits \~ Diversity (broad)
+## M6 - Recruits \~ Diversity (broad)
 
 Model formula:
 
@@ -380,19 +493,67 @@ $$
 \begin{align}
 y_i &\sim{} \mathcal{Pois}(\lambda_i)\\
 ln(\mu_i) &= \boldsymbol{\beta} \bf{X_i}\\
-\beta_0 &\sim{} \mathcal{N}(0.5, 10)\\
-\beta_{1} &\sim{} \mathcal{N}(15, 20)\\
+\beta_0 &\sim{} \mathcal{N}(0.5, 3)\\
+\beta_{1,2} &\sim{} \mathcal{N}(0,5)\\
 \end{align}
 $$
 
-## Output
+### Model diagnostics
 
-```{r}
-#| label: M14Output
-#| eval: false
-```
+![](../output/figures/MZI6PriorsPosteriors.png) 
+
+- looks good
+
+![](../output/figures/M6ZIMCMC.png)
+
+-   model converged and chains are well mixed
+
+![](../output/figures/MZI6DHARMa.png)
+
+Underdispersed, but underdispersion means that the model is more conservative as it adds uncertainty. This means that we could be sure of any result we find since we're using a more conservative model.
+
+![](../output/figures/MZI6PPCheck.png)
+
+
+### Model output
 
 ```{r}
 #| echo: false
-read.delim(file = '../output/tables/M6Output.txt', sep = ',')
+read.delim(file = '../output/tables/MZI6Output.txt', sep = ',') |>
+  mutate(across(where(is.numeric), ~round(., 2)))
 ```
+
+
+## Compare diversity quadrat vs perimeter
+
+```{r}
+#| label: CompareMZI5vsMZI6
+#| warning: false
+```
+
+- no difference
+
+# Natural occurrence of juvenile and small corals
+
+## Exploratory data analysis
+![EDA: Coral class sizes across different Sargassum heights](../output/figures/CLMM_EDA.png)
+
+```{r MN2Fit}
+#| eval: false
+
+```
+
+![](../output/figures/MN2MCMC.png)
+
+-   model converged and chains are well mixed
+
+![](../output/figures/MN2DHARMa.png)
+
+- good
+
+![](../output/figures/MN2PPCheck.png)
+
+## Model output
+
+![](../output/figures/MN1_height.png)
+

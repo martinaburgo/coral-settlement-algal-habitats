@@ -173,7 +173,14 @@ canopy |>
   ggplot(aes(x = Habitat, y = Mean)) +
   geom_violin() +
   geom_point() +
+  scale_y_continuous(expression(italic(Sargassum)*' height (cm)'))  +
   theme_classic()
+
+ggsave(file = paste0(FIGS_PATH, "/SF2_canopy_height_spawning.png"), 
+       width = 250, 
+       height = 250/1.6, 
+       units = "mm", 
+       dpi = 300)
 
 
 ### Coral sizes ----
@@ -223,6 +230,12 @@ ggplot(data = corals.sum,
         legend.position = 'bottom') + labs(fill = 'Coral class sizes')  + 
   ylab('Proportion')
 
+ggsave(file = paste0(FIGS_PATH, "/SF3_cor_class_habitat.png"), 
+       width = 250, 
+       height = 250/1.6, 
+       units = "mm", 
+       dpi = 300)
+
 
 # Data analysis ----
 data <- data |>
@@ -254,6 +267,166 @@ ggplot(data = data, aes(Diameter)) +
 
 
 # Analysis
+
+
+## MN2 - Class sizes ----
+dat2 <- corals |> 
+  mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
+  mutate(class_sizes = factor(group_tags, 
+                              levels = tags,
+                              ordered = TRUE)) |>
+  dplyr::select(Habitat, Transect, Quadrat, Taxa, class_sizes) |>
+  left_join(canopy |> 
+              mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
+              dplyr::filter(Trip == '3' | Trip == '2') |>
+              dplyr::select(Habitat, Transect, Trip, Quadrat, Mean) |>
+              group_by(Habitat, Transect, Quadrat) |>
+              summarise(Mean = mean(Mean))) |>
+  mutate(across(where(is.numeric), coalesce, 0)) |>
+  mutate(Depth = ifelse(Habitat == 'Flat', '0-1 m',
+                        ifelse(Habitat == 'Crest', '2-3 m',
+                               '4-5 m')))
+
+### Sargassum height ----
+
+#### EDA ----
+dat2 |>
+  ggplot(aes(y = class_sizes, x = Mean)) +
+  geom_point(position = position_dodge2(width = 0.3)) +
+  theme_classic() +
+  scale_x_continuous(expression('Average '*italic(Sargassum)*' height (cm)')) +
+  ylab('Coral class size (cm)')
+
+ggsave(file = paste0(FIGS_PATH, "/CLMM_EDA.png"), 
+       width = 200, 
+       height = 200/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+
+#### Fit ----
+## ----MN2Fit
+size.form <- bf(class_sizes ~ Mean + (1|Taxa),
+                family = cumulative(link = 'logit', 
+                                      threshold = 'flexible'))
+## ----end
+
+priors <- prior(normal(0, 1), class = 'Intercept') +
+  prior(normal(0, 1), class = 'b') +
+  prior(student_t(3, 0, 1), class = 'sd')
+
+
+size.brm <- brm(size.form,
+                  data = dat2,
+                  prior = priors,
+                  sample_prior = 'only',
+                  iter = 5000,
+                  warmup = 1000,
+                  chains = 3, cores = 3,
+                  thin = 5,
+                  backend = 'rstan')
+
+#check priors
+size.brm |>
+  conditional_effects(categorical = TRUE) |>
+  plot(poits = TRUE, ask = FALSE)
+
+#add data 
+size.brm2 <- update(size.brm,
+                    sample_prior = 'yes',
+                    control = list(adapt_delta = 0.99),
+                    refresh = 100)
+
+#save model
+save(size.brm2, size.form, priors, dat2, file = 'data/modelled/MN2_height.RData')
+
+size.brm2 |>
+  conditional_effects('Mean',
+                      categorical = TRUE)
+
+
+## MCMC Sampling diagnostics
+pars <- size.brm2 |> get_variables() |>
+  str_subset("^b_.*|^sd_.*")
+
+(size.brm2$fit |> stan_trace(pars = pars)) + (size.brm2$fit |> stan_ac(pars= pars)) + 
+  (size.brm2$fit |> stan_rhat()) + (size.brm2$fit |> stan_ess())
+
+ggsave(file = paste0(FIGS_PATH, "/MN2MCMC.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+## Model validation
+### Posterior probability check
+size.brm2 |> 
+  pp_check(type = 'dens_overlay', ndraws = 100)
+
+ggsave(file = paste0(FIGS_PATH, "/MN2PPCheck.png"), 
+       width = 10,
+       height = 8, 
+       dpi = 300)
+
+### Residuals
+recruit.resids <- make_brms_dharma_res(size.brm2, 
+                                       integerResponse = TRUE)
+testUniformity(recruit.resids)
+plotResiduals(recruit.resids, quantreg = FALSE) 
+testDispersion(recruit.resids)
+
+ggsave(filename = paste0(FIGS_PATH, '/MN2DHARMa.png'),
+       wrap_elements(~testUniformity(recruit.resids)) +
+         wrap_elements(~plotResiduals(recruit.resids)) +
+         wrap_elements(~testDispersion(recruit.resids)),
+       width = 12,
+       height = 4,
+       dpi = 300)
+
+
+size.brm2 |>
+  as_draws_df() |>
+  dplyr::select(matches("^b_.*|^sd_.*")) |> #they're on logit scale
+  mutate(across(matches("^b_.*"), exp)) |>
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  Pl = ~ mean(.x < 1),
+                  Pg = ~ mean(.x > 1),
+                  rhat,
+                  ess_bulk,
+                  ess_tail) |>
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+#Figure
+newdata <- with(dat2, 
+                expand.grid(Mean = seq(min(dat2$Mean),
+                                       max(dat2$Mean),
+                                       len = 100)))
+
+add_epred_draws(size.brm2, 
+                newdata = newdata, 
+                re_formula = NA) |>
+  group_by(Mean, .category) |>
+  summarise(median_hdci(.epred)) |> 
+  ggplot(aes(y = y, 
+             x = Mean, 
+             colour = .category, 
+             fill = .category)) +
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_line(size = 0.8) +
+  labs(col = 'Coral class size (cm)', 
+       fill = 'Coral class size (cm)', 
+       y = 'Probability', 
+       x = expression(paste(italic('Sargassum'), ' height (cm)')))  +
+  theme_classic() +
+  theme(legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MN2_height.png"), 
+       width = 250, 
+       height = 250/1.6, 
+       units = "mm", 
+       dpi = 300)
+
+# Old analyses ----
 
 ## MN1 - Height ----
 # Fit model
@@ -363,28 +536,10 @@ nat.brm2 |>
          Pg = round(Pg, 3)) |>
   write.table(file = 'output/tables/MN1Output.txt', sep = ",", quote = FALSE, row.names = F)
 
-## MN2 - Class sizes ----
-dat2 <- corals |> 
-  mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
-  mutate(class_sizes = factor(group_tags, 
-                              levels = tags,
-                              ordered = TRUE)) |>
-  dplyr::select(Habitat, Transect, Quadrat, Taxa, class_sizes) |>
-  left_join(canopy |> 
-              mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
-              dplyr::filter(Trip == '3' | Trip == '2') |>
-              dplyr::select(Habitat, Transect, Trip, Quadrat, Mean) |>
-              group_by(Habitat, Transect, Quadrat) |>
-              summarise(Mean = mean(Mean))) |>
-  mutate(across(where(is.numeric), coalesce, 0)) |>
-  mutate(Depth = ifelse(Habitat == 'Flat', '0-1 m',
-                        ifelse(Habitat == 'Crest', '2-3 m',
-                               '4-5 m')))
-
 ### Depth ----
 
 d.clmm2 <- ordinal::clmm(class_sizes ~ Depth + (1|Taxa),
-                        data = dat2) #Fit model
+                         data = dat2) #Fit model
 summary(d.clmm2)
 emmeans(d.clmm2, ~Depth, mode = 'mean.class') |>
   pairs()
@@ -401,9 +556,9 @@ emmeans(d.clmm2, ~class_sizes|Depth, mode = 'prob') |>
         text = element_text(size = 20)) + labs(colour = 'Coral class size') +
   ylab('Probability') +
   scale_color_viridis_d(labels = c('1' = '> 5 cm', 
-                                '2' = '6-20 cm',
-                                '3' = '21-40 cm',
-                                '4' = '> 40 cm'), 
+                                   '2' = '6-20 cm',
+                                   '3' = '21-40 cm',
+                                   '4' = '> 40 cm'), 
                         option = 'viridis')
 
 ggsave(file = paste0(FIGS_PATH, "/CLMM_depth.png"), 
@@ -412,7 +567,7 @@ ggsave(file = paste0(FIGS_PATH, "/CLMM_depth.png"),
        units = "mm", 
        dpi = 300)
 
-### Sargassum height ----
+#sarg height
 
 d.clmm <- ordinal::clmm(class_sizes ~ Mean + (1|Taxa),
                         data = dat2) #Fit model

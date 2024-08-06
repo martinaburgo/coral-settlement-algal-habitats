@@ -49,10 +49,9 @@ recruit |>
 
 # correlation plot - change to scatterplot
 recruit |> 
-  dplyr::select(H_mean_broad, Freq_Sarg_broad, H_mean_local, Freq_Sarg_local, D_broad, 
-                R_broad_alg, R_broad_coral, R_local_alg, R_local_coral, 
-                Shannon_broad_alg, Shannon_broad_cor, Shannon_local_alg, Shannon_local_cor, 
-                Tot_broad_alg, Tot_broad_coral, Tot_local_alg, Tot_local_coral) |> 
+  dplyr::select(H_mean_broad, H_mean_local, D_broad, 
+                Shannon_broad_alg, Shannon_broad_cor, 
+                Shannon_local_alg, Shannon_local_cor) |> 
   cor() |> 
   corrplot()
 
@@ -1062,14 +1061,14 @@ loo::loo_compare(loo::loo(recruit.brm4),
 ## Fit ----
 
 ## ---- MZI1Fit
-recruit.form <- bf(Total ~ Treatment + (1|Turf_height/Tile), 
+recruit.form <- bf(Total ~ Treatment + (1|Turf_height), 
                 zi ~ 1, 
                 family = zero_inflated_poisson(link = 'log'))
 ## ----end
 
 priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(0, 8), class = 'b') +
-  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(normal(0, 5), class = 'b') +
+  prior(student_t(3, 0, 2), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
 recruitZI.brm <- brm(recruit.form, prior = priors, data = recruit, 
@@ -1077,7 +1076,7 @@ recruitZI.brm <- brm(recruit.form, prior = priors, data = recruit,
                  iter = 5000, 
                  warmup = 1000, 
                  chains = 3, cores = 3, 
-                 thin = 10, 
+                 thin = 5, 
                  control = list(adapt_delta = 0.99, max_treedepth = 20),
                  refresh = 100, 
                  backend = 'rstan') 
@@ -1221,7 +1220,7 @@ MZI1ContrastFig <- recruit.em |>
                                quantiles = c(0.025, 0.975)) + 
   geom_vline(xintercept = 1, linetype = 'dashed') + 
   scale_fill_viridis_c(option = 'C') + 
-  scale_x_continuous('', trans = scales::log_trans())  + 
+  scale_x_continuous('', trans = scales::log2_trans())  + 
   scale_y_discrete('') +
   theme_classic() +
   theme(text = element_text(colour = 'black'), 
@@ -1234,7 +1233,7 @@ MZI1ContrastFig
 
 recruitZI.brm |> 
   emmeans(~Treatment) |>
-  pairs() |>
+  pairs(reverse = TRUE) |>
   tidy_draws() |> 
   exp() |>
   summarise_draws(median,
@@ -1341,30 +1340,44 @@ recruitZI.brm |>
   gather_emmeans_draws() |>
   mutate(Fit = exp(.value)) |>
   ggplot() +
-  geom_vline(xintercept = 1, linetype = 'dashed') +
   stat_slab(aes(x = Fit, y = contrast,
                 fill = stat(ggdist::cut_cdf_qi(cdf,
-                                               .width = c(0.5, 0.8, 0.95), 
-                                               labels = scales::percent_format())
-                )), color = 'black') +
-  scale_fill_brewer('Interval', direction  =  -1, na.translate = FALSE) +
+                                               .width = c(0.5, 0.8, 0.95),
+                                               labels = scales::percent_format()))), 
+            color = 'black', linewidth = 0.5) +
+  geom_vline(xintercept = 1, linetype = 'dashed') +
+  scale_fill_brewer('Interval', 
+                    direction  =  -1, 
+                    na.translate = FALSE) +
   scale_x_continuous('Effect', trans = scales::log2_trans()) +
   #scale_y_discrete('', breaks = c('TREAT.NB_S', 'TREAT.Alg2_Alg1', 'TREAT.Alg_NB', 'TREAT.Alg_Bare'),labels = c('Nat. Bare vs Scapped', 'Algae 1 vs 2', 'Algae vs Nat. Bare', 'Algae vs Bare')) +
-  theme_classic()
+  theme_classic() +
+  theme(legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MZI1_Planned_contrast_fig2.png"), 
+       width = 160, 
+       height = 160/1.6, 
+       units = "mm", 
+       dpi = 300)
 
 
 # MZI2: Recruit ~ H (broad) ----
 recruit |> dplyr::filter(H_mean_broad != 0) |> dplyr::select(H_mean_broad) |> min()/2
 
 ## Fit model ----
-recruit.form <- bf(Total ~ log(H_mean_broad + 2.2) + (1|Turf_height/Tile), 
+
+## ---- MZI2Fit
+recruit.form <- bf(Total ~ log(H_mean_broad + 2.2) + (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
+## ----end
+
+
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 5), class = 'Intercept') +
-  prior(normal(0, 8), class = 'b')  +
-  prior(student_t(3, 0, 3), class = 'sd') +
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b')  +
+  prior(student_t(3, 0, 2), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
 recruitZI.brm2 <- brm(recruit.form, prior = priors, data = recruit, 
@@ -1374,7 +1387,7 @@ recruitZI.brm2 <- brm(recruit.form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     control = list(adapt_delta = 0.99, 
                                    max_treedepth = 20), 
-                    thin = 10, 
+                    thin = 5, 
                     refresh = 100, 
                     backend = 'rstan') 
 
@@ -1441,6 +1454,7 @@ recruitZI.brm2 |>
 ### ---- MZI2Output
 recruitZI.brm2 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1451,6 +1465,7 @@ recruitZI.brm2 |>
 
 recruitZI.brm2 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1500,14 +1515,17 @@ MZI2Figure
 recruit |> dplyr::filter(H_mean_local != 0) |> dplyr::select(H_mean_local) |> min()/2
 
 ## Fit model ----
-recruit.form <- bf(Total ~ log(H_mean_local + 2) + (1|Turf_height/Tile), 
+## ---- MZI3Fit
+recruit.form <- bf(Total ~ log(H_mean_local + 2) + (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
+## ----end
+
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 5), class = 'Intercept') +
-  prior(normal(0, 8), class = 'b') + 
-  prior(student_t(3, 0, 3), class = 'sd') +
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b') + 
+  prior(student_t(3, 0, 2), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
 recruitZI.brm3 <- brm(recruit.form, prior = priors, data = recruit, 
@@ -1517,7 +1535,7 @@ recruitZI.brm3 <- brm(recruit.form, prior = priors, data = recruit,
                       chains = 3, cores = 3, 
                       control = list(adapt_delta = 0.99, 
                                      max_treedepth = 20), 
-                      thin = 10, 
+                      thin = 5, 
                       refresh = 0, 
                       backend = 'rstan') 
 
@@ -1583,6 +1601,7 @@ recruitZI.brm3 |>
 ### ---- MZI3Output
 recruitZI.brm3 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1593,6 +1612,7 @@ recruitZI.brm3 |>
 
 recruitZI.brm3 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1655,14 +1675,16 @@ loo::loo_compare(loo::loo(recruitZI.brm2),
 recruit |> dplyr::filter(D_broad != 0) |> dplyr::select(D_broad) |> min()/2
 
 ## Fit model ----
-recruit.form <- bf(Total ~ log(D_broad + 0.3) + (1|Turf_height/Tile), 
+## ---- MZI4Fit
+recruit.form <- bf(Total ~ log(D_broad + 0.3) + (1|Turf_height), 
                    zi ~ 1, 
                    family = zero_inflated_poisson(link = 'log'))
+## ----end
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 10), class = 'Intercept') +
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
   prior(normal(0, 5), class = 'b') +
-  prior(student_t(3, 0, 3), class = 'sd')  +
+  prior(student_t(3, 0, 2), class = 'sd')  +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
 recruitZI.brm4 <- brm(recruit.form, prior = priors, data = recruit, 
@@ -1672,7 +1694,7 @@ recruitZI.brm4 <- brm(recruit.form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     control = list(adapt_delta = 0.99, 
                                    max_treedepth = 20), 
-                    thin = 10, 
+                    thin = 5, 
                     refresh = 0, 
                     backend = 'rstan') 
 
@@ -1738,6 +1760,7 @@ recruitZI.brm4 |>
 ### ---- MZI4Output
 recruitZI.brm4 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1748,6 +1771,7 @@ recruitZI.brm4 |>
 
 recruitZI.brm4 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1808,11 +1832,11 @@ ggsave(file = paste0(FIGS_PATH, "/MZI_H_D_fig.png"),
        units = "mm", 
        dpi = 300)
 
-# Compare ALL ----
-loo::loo_compare(loo::loo(recruitZI.brm),
-                 loo::loo(recruitZI.brm2),
-                 loo::loo(recruitZI.brm3),
+# Compare H vs D ----
+## ---- CompareMZI3vsMZI4
+loo::loo_compare(loo::loo(recruitZI.brm3),
                  loo::loo(recruitZI.brm4))
+## ----end
 
 # Thresholds ----
 recruitZI.brm2 |> 
@@ -1859,15 +1883,18 @@ recruit |> dplyr::filter(Shannon_local_cor != 0) |> dplyr::select(Shannon_local_
 recruit |> dplyr::filter(Shannon_local_alg != 0) |> dplyr::select(Shannon_local_alg) |> min()/2
 
 ## Fit model ----
+
+## ---- MZI5Fit
 recruit.form <- bf(Total ~ scale(log(Shannon_local_cor + 0.04)) + scale(log(Shannon_local_alg + 0.01)) + 
-                     (1|Turf_height/Tile), 
+                     (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
+## ----end
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 10), class = 'Intercept') +
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
   prior(normal(0, 5), class = 'b') +
-  prior(student_t(3, 0, 3), class = 'sd') +
+  prior(student_t(3, 0, 2), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
 recruitZI.brm5 <- brm(recruit.form, prior = priors, data = recruit, 
@@ -1877,7 +1904,7 @@ recruitZI.brm5 <- brm(recruit.form, prior = priors, data = recruit,
                     chains = 3, cores = 3, 
                     control = list(adapt_delta = 0.99, 
                                    max_treedepth = 20), 
-                    thin = 10, 
+                    thin = 5, 
                     refresh = 0, 
                     backend = 'rstan') 
 
@@ -1943,6 +1970,7 @@ recruitZI.brm5 |>
 ### ---- MZI5Output
 recruitZI.brm5 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1953,6 +1981,7 @@ recruitZI.brm5 |>
 
 recruitZI.brm5 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -1971,16 +2000,18 @@ recruitZI.brm5 |>
 recruit |> dplyr::filter(Shannon_broad_alg != 0) |> dplyr::select(Shannon_broad_alg) |> min()/2
 
 ## Fit model ----
+## ---- MZI16Fit
 recruit.form <- bf(Total ~ scale(Shannon_broad_cor) + 
                      scale(log(Shannon_broad_alg + 0.03)) + 
-                     (1|Turf_height/Tile), 
+                     (1|Turf_height), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
+## ----end
 recruit.form |> get_prior(data = recruit)
 
-priors <- prior(normal(0.5, 8), class = 'Intercept') +
-  prior(normal(0, 8), class = 'b') +
-  prior(student_t(3, 0, 3), class = 'sd') +
+priors <- prior(normal(0.5, 3), class = 'Intercept') +
+  prior(normal(0, 5), class = 'b') +
+  prior(student_t(3, 0, 2), class = 'sd') +
   prior(logistic(0, 1), class = 'Intercept', dpar = 'zi')
 
 recruitZI.brm6 <- brm(recruit.form, prior = priors, data = recruit, 
@@ -1990,7 +2021,7 @@ recruitZI.brm6 <- brm(recruit.form, prior = priors, data = recruit,
                      chains = 3, cores = 3, 
                      control = list(adapt_delta = 0.99, 
                                     max_treedepth = 20), 
-                     thin = 10, 
+                     thin = 5, 
                      refresh = 0, 
                      backend = 'rstan') 
 
@@ -2056,6 +2087,7 @@ recruitZI.brm6 |>
 ### ---- MZI6Output
 recruitZI.brm6 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
@@ -2066,6 +2098,7 @@ recruitZI.brm6 |>
 
 recruitZI.brm6 |>
   brms::as_draws_df() |>
+  dplyr::select(starts_with('b_')) |>
   mutate(across(everything(), exp)) |>
   summarise_draws(median,
                   HDInterval::hdi,
