@@ -2,5 +2,5 @@ data/
 .Rproj.user
 .Rhistory
 coral-settlement-algal-habitats.Rproj
-docs/coral-settlement-algal-habitats_cache
-docs/coral-settlement-algal-habitats_files
+output/
+docs/

@@ -538,6 +538,7 @@ read.delim(file = '../output/tables/MZI6Output.txt', sep = ',') |>
 ## Exploratory data analysis
 ![EDA: Coral class sizes across different Sargassum heights](../output/figures/CLMM_EDA.png)
 
+
 ```{r MN2Fit}
 #| eval: false
 
