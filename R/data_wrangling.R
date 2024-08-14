@@ -234,7 +234,7 @@ recruit <- recruit |>
   left_join(tile_benthos)
 
 # Save ----
-write.csv(recruit, file = 'data/processed/recruit.csv')
+#write.csv(recruit, file = 'data/processed/recruit.csv')
 
 
 # Juveniles density ----
@@ -262,7 +262,7 @@ tags <- c("<5", "6-20", '21-40', '>40') # specify interval/bin labels
 group_tags <- cut(corals$Diameter, 
                   breaks = breaks, 
                   include.lowest = TRUE, 
-                  right = FALSE, 
+                  right = TRUE, 
                   labels = tags) # bucketing values into bins
 summary(group_tags) # inspect bins
 class_sizes <- factor(group_tags, 
@@ -284,7 +284,7 @@ data <- corals |>
   mutate(class_sizes = factor(group_tags, 
                               levels = tags,
                               ordered = TRUE)) |>
-  dplyr::select(Habitat, Transect, Quadrat, Taxa, class_sizes) |>
+  dplyr::select(Habitat, Transect, Quadrat, Taxa, Diameter, class_sizes) |>
   left_join(canopy |> 
               dplyr::filter(Trip == '3' | Trip == '2') |>
               dplyr::select(Habitat, Transect, Trip, Quadrat, Mean) |>

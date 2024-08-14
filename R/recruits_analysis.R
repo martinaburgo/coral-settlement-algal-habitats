@@ -1344,7 +1344,7 @@ recruitZI.brm |>
                 fill = stat(ggdist::cut_cdf_qi(cdf,
                                                .width = c(0.5, 0.8, 0.95),
                                                labels = scales::percent_format()))), 
-            color = 'black', linewidth = 0.5) +
+            color = 'black', linewidth = 0.3) +
   geom_vline(xintercept = 1, linetype = 'dashed') +
   scale_fill_brewer('Interval', 
                     direction  =  -1, 

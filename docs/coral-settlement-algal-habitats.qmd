@@ -86,8 +86,8 @@ library(bayestestR)
 library(ggridges) 
 
 source('../R/functions.R')
-knitr::read_chunk('../R/data_analysis.R')
-knitr::read_chunk('../R/multivariate_analysis.R')
+knitr::read_chunk('../R/recruits_analysis.R')
+knitr::read_chunk('../R/benthic_analysis.R')
 ```
 
 ## Load models
@@ -536,7 +536,7 @@ read.delim(file = '../output/tables/MZI6Output.txt', sep = ',') |>
 # Natural occurrence of juvenile and small corals
 
 ## Exploratory data analysis
-![EDA: Coral class sizes across different Sargassum heights](../output/figures/CLMM_EDA.png)
+![EDA: Coral class sizes across different Sargassum heights](../output/figures/EDA_natural_juvs.png)
 
 
 ```{r MN2Fit}
@@ -556,5 +556,11 @@ read.delim(file = '../output/tables/MZI6Output.txt', sep = ',') |>
 
 ## Model output
 
-![](../output/figures/MN1_height.png)
+```{r}
+#| echo: false
+read.delim(file = '../output/tables/MN2Output.txt', sep = ',')
+```
+
+
+![](../output/figures/MN2_height.png)
 
