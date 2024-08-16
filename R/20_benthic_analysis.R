@@ -61,6 +61,8 @@ benthos <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", sh
                  readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence")) |>
   dplyr::select(!c(Date))
 
+canopy <- read.csv('data/primary/canopy_data.csv')
+
 # MDS ----
 ## MDS Plot ----
 ## ---- MDS fit
@@ -69,10 +71,6 @@ data.mds <- metaMDS(data[,-c(1:10)], k=2,  plot=TRUE) #it always standardise by 
 data.mds #check that the stress is <0.2, the dimensions show to what reduction we drove the data
 stressplot(data.mds) #N.B. is usually a non linear trend
 ## ----end
-
-data.env.scores <- envfit |>
-  fortify() |> 
-  mutate(Label = label)
 
 data.mds.scores <- data.mds |> 
   fortify() |> 
@@ -93,19 +91,19 @@ col_vals <- c("T4" = "#8dd3c7",
 
 ### Supplementary Figure 1 ----
 nMDS_plot <- ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) + 
-    geom_segment(data = data.mds.scores |> filter(Score == 'species'),
-                 aes(y = 0, x = 0, yend = NMDS2, xend = NMDS1), alpha = 0.7) +
-    geom_text_repel(data = data.mds.scores |> filter(Score == 'species'),
-              aes(y = NMDS2*1.1, x = NMDS1*1.1, label=Label), alpha = 0.7) +
+  ggforce::geom_mark_ellipse(data = data.mds.scores |> 
+                               filter(Score=='sites'),
+                             aes(y = NMDS2, x = NMDS1, 
+                                 fill = Treatment, 
+                                 colour = Treatment), expand = 0, alpha = 0.2) + 
   geom_point(data=data.mds.scores |> 
                filter(Score=='sites'),
              aes(color = Treatment, shape = Treatment), size = 2, alpha = 0.6) +
-    ggforce::geom_mark_ellipse(data = data.mds.scores |> 
-                                 filter(Score=='sites'),
-                               aes(y = NMDS2, x = NMDS1, 
-                                   fill = Treatment, 
-                                   colour = Treatment), expand = 0, alpha = 0.2) + 
-    scale_colour_manual(values = col_vals) + scale_fill_manual(values = col_vals) +
+  geom_segment(data = data.mds.scores |> filter(Score == 'species'),
+                 aes(y = 0, x = 0, yend = NMDS2, xend = NMDS1), alpha = 0.7) +
+    geom_text_repel(data = data.mds.scores |> filter(Score == 'species'),
+              aes(y = NMDS2*1.1, x = NMDS1*1.1, label=Label), alpha = 0.7) +
+  scale_colour_manual(values = col_vals) + scale_fill_manual(values = col_vals) +
     theme_classic() + theme(legend.position = c(0.85, 0.2))
 nMDS_plot
 
@@ -185,18 +183,15 @@ benthos |>
   summarise(mean = mean(mean)) |>
   View()
 
-benthos |>
-  dplyr::filter(Category == 'Alga') |>
-  dplyr::filter(Habitat == 'Crest') |>
-  group_by(Trip, Transect, Taxa) |>
-  summarise(sum = mean(Cover)) |>
-  group_by(Trip, Taxa) |>
-  summarise(mean = mean(sum)) |>
-  ungroup() |>
-  dplyr::filter(Taxa == 'Halymenia' | Taxa == 'Galaxaura' | Taxa == 'Neomeris') |>
-  ggplot(aes(y = mean, x = factor(Trip), fill = Taxa)) +
-  geom_histogram(stat = 'identity')
 
+# algal genera in each treatment:
+data |>
+  pivot_longer(names_to = 'Taxa', values_to = 'Cover', cols = 11:26) |>
+  dplyr::select(Tile, Treatment, Taxa, Cover) |>
+  group_by(Treatment, Taxa) |>
+  summarise(avg = round(mean(Cover), 1)) |>
+  arrange(Treatment, desc(avg)) |>
+  View()
 
 ### Canopy height ----
 
@@ -206,21 +201,16 @@ for (i in 1:nrow(canopy)) {
     unlist() |>
     as.numeric() |>
     mean()
-  
-  canopy[i, 'Max'] <- canopy[i, 'Height'] |>
-    str_split(', ') |>
-    unlist() |>
-    as.numeric() |>
-    max()
 }
 
 canopy <- canopy |>
-  mutate(Mean = as.numeric(Mean),
-         Max = as.numeric(Max))
+  mutate(Mean = as.numeric(Mean))
 
 
 canopy |>
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
+  dplyr::filter(Site == 'Florence') |>
+  droplevels() |>
   ggplot(aes(x = Trip, y = Mean)) +
   geom_violin(aes(group = Trip)) +
   facet_wrap(~Habitat)
@@ -229,6 +219,8 @@ canopy |>
 
 canopy |>
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
+  dplyr::filter(Site == 'Florence') |>
+  droplevels() |>
   ggplot(aes(y = Mean, x = factor(Trip), color = Habitat)) +
   geom_point(position = position_jitterdodge(jitter.width = 0.02, dodge.width = 0.9),
              alpha = 0.2) +
@@ -254,6 +246,8 @@ ggsave(file = paste0(FIGS_PATH, "/SF1_canopy_height.png"),
 
 canopy |> 
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), ordered = TRUE)) |>
+  dplyr::filter(Site == 'Florence') |>
+  droplevels() |>
   dplyr::filter(Trip == '3') |>
   ggplot(aes(x = Habitat, y = Mean)) +
   geom_violin() +

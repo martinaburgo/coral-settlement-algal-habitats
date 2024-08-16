@@ -54,7 +54,7 @@ ggsave(file = paste0(FIGS_PATH, "/EDA_natural_juvs.png"),
 
 # Data analysis ----
 
-## MN2 - Class sizes ----
+## MN2 - Size-frequency analysis ----
 ### Fit ----
 ## ----MN2Fit
 size.form <- bf(class_sizes ~ Mean + (1|Taxa),
@@ -159,7 +159,7 @@ size.brm2 |>
                   Pl = ~ mean(.x < 1),
                   Pg = ~ mean(.x > 1))
 
-#Figure
+## Figure ----
 preds <- add_epred_draws(size.brm2, 
                 newdata = expand.grid(Mean = seq(min(data$Mean),
                                                  max(data$Mean),
@@ -171,12 +171,6 @@ preds <- add_epred_draws(size.brm2,
 coeff <- 150
 
 ggplot() +
-  geom_point(data = data, 
-             mapping = aes(y = Diameter/coeff, 
-                           x = Mean),
-             size = 1,
-             alpha = 0.4,
-             position = position_jitter(width = 0.1, height = -0.1)) +
   geom_ribbon(data = preds, 
               aes(x = Mean, 
                   ymin = ymin, 
@@ -188,6 +182,12 @@ ggplot() +
                 x = Mean, 
                 colour = .category), 
             size = 0.8) +
+  geom_point(data = data, 
+             mapping = aes(y = Diameter/coeff, 
+                           x = Mean),
+             size = 1.5,
+             alpha = 0.5,
+             position = position_jitter(width = 0.1, height = -0.1)) +
   labs(col = 'Coral class size (cm)', 
        fill = 'Coral class size (cm)', 
        x = expression(paste(italic('Sargassum'), ' height (cm)')))  +
@@ -218,7 +218,19 @@ add_epred_draws(size.brm2,
                                                  len = 100)), 
                 re_formula = NA) |>
   group_by(Mean, .category) |>
-  filter(.epred < 0.1 & .category == '<5') |>
+  filter(.epred < 0.15 & .category == '<5') |>
+  ungroup() |>
+  summarise(median_hdci(Mean),
+            Pl = mean(Mean < 1),
+            Pg = mean(Mean > 1))
+
+add_epred_draws(size.brm2, 
+                newdata = expand.grid(Mean = seq(min(data$Mean),
+                                                 max(data$Mean),
+                                                 len = 100)), 
+                re_formula = NA) |>
+  group_by(Mean, .category) |>
+  filter(.epred > 0.85 & .category == '>40' | .category == '21-40') |>
   ungroup() |>
   summarise(median_hdci(Mean),
             Pl = mean(Mean < 1),

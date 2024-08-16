@@ -250,7 +250,7 @@ canopy <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", she
                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-6.xlsx", sheet = "Florence"),
                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-7.xlsx", sheet = "Florence"),
                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence")) |>
-  dplyr::select(!c(Date, Metre, Taxa, Diameter, Interaction, Distance, Cover)) |>
+  dplyr::select(!c(Date, Metre, Taxa, Diameter, Interaction, Distance)) |>
   dplyr::filter(!is.na(Thalli))
 
 
