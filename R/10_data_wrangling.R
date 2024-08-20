@@ -19,13 +19,12 @@ tile_benthos <- readxl::read_xlsx(path = "data/primary/CH3-tile-benthos.xlsx", s
          Tile = factor(Tile))
 str(data)
 
-# Data wrangling - TILES ----
+# TIle ----
 # First, declare categorical variables and combine top and bottom recruits as almost no recruits were found on the top of the tiles.
 data <- data |>
   filter(!is.na(Unbleached)) |>
   mutate(Tile = factor(Tile),
-         Treatment = factor(Treatment, levels = c("No algae", "Only mat", "Only canopy", 
-                                                  "All algae")),
+         Treatment = factor(Treatment),
          Grazing = factor(Grazing)) |>
   group_by(Tile) |>
   mutate(Total = sum(Unbleached)) |>
@@ -34,14 +33,14 @@ data <- data |>
 
 ## Benthic composition ----
 benthic_broad <- benthic_broad |>
-  mutate(Cover = ifelse(Cover == "+", '0.5', Cover)) |>
-  mutate(Cover = as.numeric(Cover)) |> #adjust rare species
+  mutate(Cover = ifelse(Cover == "+", '1', Cover)) |>
+  mutate(Cover = as.numeric(Cover)) |>
   group_by(Tile) |>
   mutate(Freq_broad = Cover / sum(Cover)*100)
 
 benthic_local <- benthic_local |>
   mutate(Perimeter = ifelse(Perimeter == "+", '1', Perimeter)) |>
-  mutate(Perimeter = as.numeric(Perimeter)) |> #adjust rare species
+  mutate(Perimeter = as.numeric(Perimeter)) |> 
   group_by(Tile) |>
   mutate(Freq_local = Perimeter / sum(Perimeter)*100)
 
@@ -49,8 +48,7 @@ benthic_local <- benthic_local |>
 ### Broad ----
 canopy_broad <- benthic_broad |>
   filter(Taxa == "Sargassum") |>
-  mutate(H_mean_broad = NA,
-         H_sd_broad = NA) |>
+  mutate(H_mean_broad = NA) |>
   rename(Freq_Sarg_broad = Freq_broad)
 
 for (i in 1:nrow(canopy_broad)) {
@@ -59,19 +57,12 @@ for (i in 1:nrow(canopy_broad)) {
     unlist() |>
     as.numeric() |>
     mean()
-  
-  canopy_broad[i, 'H_sd_broad'] <- canopy_broad[i, 'Height'] |>
-    str_split(', ') |>
-    unlist() |>
-    as.numeric() |>
-    sd()
 }
 
 ### Local ----
 canopy_local <- benthic_local |>
   filter(Taxa == "Sargassum") |>
   mutate(H_mean_local = NA,
-         H_sd_local = NA,
          Freq_Sarg_local = Freq_local)
 
 for (i in 1:nrow(canopy_local)) {
@@ -80,12 +71,6 @@ for (i in 1:nrow(canopy_local)) {
     unlist() |>
     as.numeric() |>
     mean()
-  
-  canopy_local[i, 'H_sd_local'] <- canopy_local[i, 'Height'] |>
-    str_split(', ') |>
-    unlist() |>
-    as.numeric() |>
-    sd()
 }
 
 ## Species Richness and Divesity ----
@@ -95,29 +80,14 @@ R_broad <- benthic_broad |>
   group_by(Tile, Category) |>
   summarise(R_broad = n()) |>
   pivot_wider(names_from = Category, values_from = R_broad, values_fill = 0) |>
-  rename(R_broad_alg = Macroalgae,
-         R_broad_coral = Coral)
+  rename(R_broad_alg = Macroalgae)
 
 R_local <- benthic_local |>
   filter(Category != 'Other') |>
   group_by(Tile, Category) |>
   summarise(n = n()) |>
   pivot_wider(names_from = Category, values_from = n, values_fill = 0) |>
-  rename(R_local_alg = Macroalgae,
-         R_local_coral = Coral)
-
-Shannon_broad_alg <- benthic_broad |>
-  filter(Category == 'Macroalgae') |>
-  distinct(Tile) |>
-  arrange(-Tile) |>
-  add_column(benthic_broad |>
-               filter(Category == 'Macroalgae') |>
-               dplyr::select(-Time, -Height, -Density, -Cover, -Category) |>
-               pivot_wider(names_from = Taxa, values_from = Freq_broad, values_fill = 0) |>
-               arrange(-Tile) |>
-               diversity(index = 'shannon') |>
-               as_tibble()) |>
-  rename(Shannon_broad_alg = value)
+  rename(R_local_alg = Macroalgae)
 
 ### Diversity ----
 Shannon_broad_alg <- benthic_broad |>
@@ -146,59 +116,29 @@ Shannon_local_alg <- benthic_local |>
                as_tibble()) |>
   rename(Shannon_local_alg = value)
 
-Shannon_broad_cor <- benthic_broad |>
-  filter(Category == 'Coral') |>
-  distinct(Tile) |>
-  arrange(-Tile) |>
-  add_column(benthic_broad |>
-               filter(Category == 'Coral') |>
-               dplyr::select(-Time, -Height, -Density, -Cover, -Category) |>
-               pivot_wider(names_from = Taxa, values_from = Freq_broad, values_fill = 0) |>
-               arrange(-Tile) |>
-               diversity(index = 'shannon') |>
-               as_tibble()) |>
-  rename(Shannon_broad_cor = value)
-
-Shannon_local_cor <- benthic_local |>
-  filter(Category == 'Coral') |>
-  distinct(Tile) |>
-  arrange(-Tile) |>
-  add_column(benthic_local |>
-               filter(Category == 'Coral') |>
-               dplyr::select(-Time, -Height, -Perimeter, -Category) |>
-               pivot_wider(names_from = Taxa, values_from = Freq_local, values_fill = 0) |>
-               arrange(-Tile) |>
-               diversity(index = 'shannon') |>
-               as_tibble()) |>
-  rename(Shannon_local_cor = value)
-
 ### Coral cover ----
 Tot_broad <- benthic_broad |>
   filter(Category != 'Other') |>
   group_by(Tile, Category) |>
   summarise(n = sum(Freq_broad)) |>
   pivot_wider(names_from = Category, values_from = n, values_fill = 0) |>
-  rename(Tot_broad_alg = Macroalgae,
-         Tot_broad_coral = Coral)
+  rename(Tot_broad_alg = Macroalgae)
 
 Tot_local <- benthic_local |>
   filter(Category != 'Other') |>
   group_by(Tile, Category) |>
   summarise(n = sum(Freq_local)) |>
   pivot_wider(names_from = Category, values_from = n, values_fill = 0) |>
-  rename(Tot_local_alg = Macroalgae,
-         Tot_local_coral = Coral)
+  rename(Tot_local_alg = Macroalgae)
 
-# Combine datasets ----
+## Combine datasets ----
 recruit <- data |>
   left_join(canopy_broad |>
               mutate(Tile = factor(Tile)) |>
-              select(Tile, H_mean_broad, H_sd_broad, Freq_Sarg_broad)) |>
+              select(Tile, H_mean_broad, Freq_Sarg_broad)) |>
   left_join(canopy_local |>
               mutate(Tile = factor(Tile)) |>
-              select(Tile, H_mean_local, H_sd_local, Freq_Sarg_local)) |>
-  mutate(Hadj_broad = H_sd_broad/H_mean_broad,
-         Hadj_local = H_sd_local/H_mean_local) |>
+              select(Tile, H_mean_local, Freq_Sarg_local)) |>
   left_join(benthic_broad |>
               mutate(Tile = factor(Tile)) |>
               group_by(Tile) |>
@@ -212,33 +152,29 @@ recruit <- data |>
 recruit <- recruit |>
   left_join(R_broad |>
               mutate(Tile = factor(Tile)) |>
-              dplyr::select(Tile, R_broad_coral, R_broad_alg)) |> 
+              dplyr::select(Tile, R_broad_alg)) |> 
   left_join(R_local |>
               mutate(Tile = factor(Tile)) |>
-              dplyr::select(Tile, R_local_coral, R_local_alg)) |> 
+              dplyr::select(Tile, R_local_alg)) |> 
   left_join(Shannon_broad_alg |>
               mutate(Tile = factor(Tile))) |> 
-  left_join(Shannon_broad_cor |>
-              mutate(Tile = factor(Tile))) |>
   left_join(Shannon_local_alg |>
               mutate(Tile = factor(Tile))) |>  
-  left_join(Shannon_local_cor |>
-              mutate(Tile = factor(Tile))) |> 
   left_join(Tot_broad |>
               mutate(Tile = factor(Tile)) |>
-            dplyr::select(Tot_broad_coral, Tot_broad_alg)) |> 
+            dplyr::select(Tot_broad_alg)) |> 
   left_join(Tot_local |>
               mutate(Tile = factor(Tile)) |>
-              dplyr::select(Tot_local_coral, Tot_local_alg)) |>
+              dplyr::select(Tot_local_alg)) |>
   mutate_all(~replace(., is.na(.), 0)) |>
   left_join(tile_benthos)
 
-# Save ----
+### Save ----
 #write.csv(recruit, file = 'data/processed/recruit.csv')
 
 
 # Juveniles density ----
-## Load data ----
+# Load data
 corals <- readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence") |>
   dplyr::select(Habitat, Trip, Period, Transect, Quadrat, Taxa, Interaction, Diameter, Distance, Cover, Height) |>
   dplyr::filter(!is.na(Diameter))
@@ -252,10 +188,6 @@ canopy <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", she
                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence")) |>
   dplyr::select(!c(Date, Metre, Taxa, Diameter, Interaction, Distance)) |>
   dplyr::filter(!is.na(Thalli))
-
-
-## Final dataset for juveniles analysis----
-### Data wrangling ----
 # create coral class sizes
 breaks <- c(0, 5, 20,  40, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
 tags <- c("<5", "6-20", '21-40', '>40') # specify interval/bin labels
@@ -295,6 +227,6 @@ data <- corals |>
                         ifelse(Habitat == 'Crest', '2-3 m',
                                '4-5 m')))
 
-# Save dataset ----
+## Save dataset ----
 #write.csv(data, file = 'data/processed/natural_recruitment.csv')
 

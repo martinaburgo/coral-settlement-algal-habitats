@@ -49,17 +49,15 @@ recruit |>
 
 # scatterplot
 scatterplotMatrix(~Total + H_mean_broad + H_mean_local + D_broad +
-                    Shannon_broad_alg + Shannon_broad_cor + 
-                    Shannon_local_alg + Shannon_local_cor, 
+                    Shannon_broad_alg + Shannon_local_alg, 
                   data = recruit, diagonal = list(method = 'boxplot'))
-#log everything but Shannon_broad_cor
 
-# MZI1 - base ----
+# MZI1 - Treatments ----
 
 ## Fit ----
 
 ## ---- MZI1Fit
-recruit.form <- bf(Total ~ Treatment + (1|Turf_height), 
+recruit.form <- bf(Total ~ Treatment + (1|Grazing), 
                 zi ~ 1, 
                 family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -133,8 +131,7 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI1DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm, recruit.form, priors, recruit, 
-     file = 'data/modelled/MZI1_base.RData')
+#save(recruitZI.brm, recruit.form, priors, recruit, file = 'data/modelled/MZI1_base.RData')
 
 ## Investigation ----
 recruitZI.brm |> 
@@ -176,8 +173,8 @@ recruitZI.brm |>
 recruitZI.brm |> 
   emmeans(~Treatment, type = 'link') |>
   pairs(reverse = TRUE) |>
-  gather_emmeans_draws() |> #it's on log scale, so we need to mutate it
-  mutate(Response = exp(.value)) |>
+  gather_emmeans_draws() |> 
+  mutate(Response = exp(.value)) |> #it's on log scale, so we need to mutate it
   summarise(median_hdci(Response),
             Pl = mean(Response < 1),
             Pg = mean(Response > 1))
@@ -186,14 +183,14 @@ recruitZI.brm |>
 recruitZI.brm |> 
   emmeans(~Treatment, type = 'link') |>
   pairs(reverse = TRUE) |>
-  gather_emmeans_draws() |> #it's on log scale, so we need to mutate it
+  gather_emmeans_draws() |>
   mutate(Response = exp(.value)) |>
   summarise(median_hdci(Response),
             Pl = mean(Response < 1),
             Pg = mean(Response > 1)) |>
   write.table(file = 'output/tables/MZI1Contrast.txt', sep = ",", quote = FALSE, row.names = F)
 
-### ROPE ----
+### ROPE 
 recruitZI.brm |> 
   emmeans(~Treatment, type = 'link') |>
   pairs(reverse = TRUE) |>
@@ -203,57 +200,10 @@ recruitZI.brm |>
             ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
 
 
-### Figure ----
-recruit.em <- recruitZI.brm |> 
-  emmeans(~Treatment, type = 'link') |>
-  pairs() |>
-  gather_emmeans_draws() |>
-  mutate(Fit = exp(.value))
-
-MZI1ContrastFig <- recruit.em |> 
-  ggplot(aes(x = Fit)) +
-  geom_density_ridges_gradient(aes(y = contrast, fill = stat(x)),
-                               alpha = 0.4, color = 'white', 
-                               quantile_lines = TRUE,
-                               quantiles = c(0.025, 0.975)) + 
-  geom_vline(xintercept = 1, linetype = 'dashed') + 
-  scale_fill_viridis_c(option = 'C') + 
-  scale_x_continuous('', trans = scales::log2_trans())  + 
-  scale_y_discrete('') +
-  theme_classic() +
-  theme(text = element_text(colour = 'black'), 
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.5)),
-        legend.text = element_text(size = rel(1.2)),
-        legend.title = element_text(size = rel(1.5)),
-        legend.position = 'none')
-MZI1ContrastFig
-
-recruitZI.brm |> 
-  emmeans(~Treatment) |>
-  pairs(reverse = TRUE) |>
-  tidy_draws() |> 
-  exp() |>
-  summarise_draws(median,
-                  HDInterval::hdi,
-                  Pl = ~mean(.x < 1),
-                  Pg = ~mean(.x > 1)) |>
-  as.data.frame() |>
-  ggplot(aes(y = variable, x = median)) +
-  geom_vline(xintercept = 1, linetype = 'dashed') +
-  geom_pointrange(aes(xmin = lower, xmax = upper)) +
-  scale_x_continuous("Effect size", 
-                     trans = scales::log2_trans(),
-                     labels = function(x) 100 * (x-1)) + # so it's simmetrical around 1
-  theme_classic()
-
 ## Further investigation ----
 
 ### ---- ZIPlannedContrast
-cmat <- cbind('Mat_Canopy' = c(1/2, -1/2, 1/2, -1/2),
-              'NoAlg_AnyAlg' = c(1, -1/3, -1/3, -1/3),
-              'Mat_AnyAlg' = c(0, -1/2, 1, -1/2),
-              'NoAlg_Canopy' = c(1, -1/2, 0, -1/2))
+cmat <- cbind('Mat_Canopy' = c(1/2, -1/2, 1/2, -1/2))
 recruitZI.brm |>
   emmeans(~Treatment, type = 'link') |>
   contrast(method = list(Treatment = cmat)) |>
@@ -264,7 +214,6 @@ recruitZI.brm |>
             Pg = mean(Response > 1),
             ROPE = rope(Response, range = c(0.9, 1.1))$ROPE_Percentage)
 ### ----end
-
 
 recruitZI.brm |>
   emmeans(~Treatment, type = 'link') |>
@@ -293,7 +242,7 @@ recruitZI.brm |>
   ggplot(aes(x = Treatment, y = rate)) +
   geom_pointrange(aes(ymin = lower.HPD, ymax = upper.HPD)) +
   theme_classic() +
-  ylab('Number of coral recruits') +
+  ylab('Coral recruitment (recruits/tile)') +
   geom_point(data = recruit, aes(x = Treatment, y = Total), alpha = 0.4,
              position = position_jitter(width = 0.1, height = 0.1))
 
@@ -303,40 +252,12 @@ ggsave(file = paste0(FIGS_PATH, "/MZI1_Treat_fig.png"),
        units = "mm", 
        dpi = 300)
 
-# Planned contrasts figure
-recruitZI.brm |>
+# Contrasts figure
+recruitZI.brm |> 
   emmeans(~Treatment, type = 'link') |>
-  contrast(method = list(Treatment = cmat)) |>
+  pairs() |>
   gather_emmeans_draws() |>
-  mutate(Response = exp(.value)) |> 
-  ggplot(aes(x = Response)) +
-  geom_density_ridges_gradient(aes(y = contrast, fill = stat(x)),
-                               alpha = 0.4, color = 'white', 
-                               quantile_lines = TRUE,
-                               quantiles = c(0.025, 0.975)) + 
-  geom_vline(xintercept = 1, linetype = 'dashed') + 
-  scale_fill_viridis_c(option = 'C') + 
-  scale_x_continuous('', trans = scales::log2_trans())  + 
-  scale_y_discrete('') +
-  theme_classic() +
-  theme(text = element_text(colour = 'black'), 
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.5)),
-        legend.text = element_text(size = rel(1.2)),
-        legend.title = element_text(size = rel(1.5)),
-        legend.position = 'none')
-
-ggsave(file = paste0(FIGS_PATH, "/MZI1_Planned_contrast_fig.png"), 
-       width = 160, 
-       height = 160/1.6, 
-       units = "mm", 
-       dpi = 300)
-
-recruitZI.brm |>
-  emmeans(~Treatment, type = 'link') |>
-  contrast(method = list(TREAT = cmat)) |>
-  gather_emmeans_draws() |>
-  mutate(Fit = exp(.value)) |>
+  mutate(Fit = exp(.value)) |> 
   ggplot() +
   stat_slab(aes(x = Fit, y = contrast,
                 fill = stat(ggdist::cut_cdf_qi(cdf,
@@ -347,12 +268,11 @@ recruitZI.brm |>
   scale_fill_brewer('Interval', 
                     direction  =  -1, 
                     na.translate = FALSE) +
-  scale_x_continuous('Effect', trans = scales::log2_trans()) +
-  #scale_y_discrete('', breaks = c('TREAT.NB_S', 'TREAT.Alg2_Alg1', 'TREAT.Alg_NB', 'TREAT.Alg_Bare'),labels = c('Nat. Bare vs Scapped', 'Algae 1 vs 2', 'Algae vs Nat. Bare', 'Algae vs Bare')) +
+  scale_x_continuous('Effect', trans = scales::log2_trans(), labels = scales::comma) +
   theme_classic() +
   theme(legend.position = 'bottom')
 
-ggsave(file = paste0(FIGS_PATH, "/MZI1_Planned_contrast_fig2.png"), 
+ggsave(file = paste0(FIGS_PATH, "/MZI1_Contrast_fig.png"), 
        width = 160, 
        height = 160/1.6, 
        units = "mm", 
@@ -365,7 +285,7 @@ recruit |> dplyr::filter(H_mean_broad != 0) |> dplyr::select(H_mean_broad) |> mi
 ## Fit model ----
 
 ## ---- MZI2Fit
-recruit.form <- bf(Total ~ log(H_mean_broad + 2.2) + (1|Turf_height), 
+recruit.form <- bf(Total ~ log(H_mean_broad + 2.2) + (1|Grazing), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -440,8 +360,7 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI2DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm2, recruit.form, priors, recruit, 
-     file = 'data/modelled/MZI2_Height_broad.RData')
+#save(recruitZI.brm2, recruit.form, priors, recruit, file = 'data/modelled/MZI2_Height_broad.RData')
 
 ## Investigation ----
 recruitZI.brm2 |> 
@@ -496,7 +415,7 @@ MZI2Figure <- fit |>
              y = y)) + 
   geom_line() + 
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
-  geom_point(data = recruit, aes(x = H_mean_broad, y = Total), alpha = 0.4,
+  geom_point(data = recruit, aes(x = H_mean_broad, y = Total), alpha = 0.4, size = 2, 
              position = position_jitter(width = 0.1, height = 0.1)) +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
   scale_y_continuous('Number of coral recruits') +
@@ -514,7 +433,7 @@ recruit |> dplyr::filter(H_mean_local != 0) |> dplyr::select(H_mean_local) |> mi
 
 ## Fit model ----
 ## ---- MZI3Fit
-recruit.form <- bf(Total ~ log(H_mean_local + 2) + (1|Turf_height), 
+recruit.form <- bf(Total ~ log(H_mean_local + 2) + (1|Grazing), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -587,8 +506,7 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI3DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm3, recruit.form, priors, recruit, 
-     file = 'data/modelled/MZI3_Height_local.RData')
+#save(recruitZI.brm3, recruit.form, priors, recruit, file = 'data/modelled/MZI3_Height_local.RData')
 
 ## Investigation ----
 recruitZI.brm3 |> 
@@ -643,7 +561,7 @@ MZI3Figure <- fit |>
              y = y)) + 
   geom_line() + 
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
-  geom_point(data = recruit, aes(x = H_mean_local, y = Total), alpha = 0.4,
+  geom_point(data = recruit, aes(x = H_mean_local, y = Total), alpha = 0.4, size = 2, 
              position = position_jitter(width = 0.1, height = 0.1))  +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
   scale_y_continuous('Number of coral recruits') +
@@ -674,7 +592,7 @@ recruit |> dplyr::filter(D_broad != 0) |> dplyr::select(D_broad) |> min()/2
 
 ## Fit model ----
 ## ---- MZI4Fit
-recruit.form <- bf(Total ~ log(D_broad + 0.3) + (1|Turf_height), 
+recruit.form <- bf(Total ~ log(D_broad + 0.3) + (1|Grazing), 
                    zi ~ 1, 
                    family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -747,7 +665,7 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI4DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm4, recruit.form, priors, recruit, file = 'data/modelled/MZI4_Density.RData')
+#save(recruitZI.brm4, recruit.form, priors, recruit, file = 'data/modelled/MZI4_Density.RData')
 
 ## Investigation ----
 recruitZI.brm4 |> 
@@ -802,7 +720,7 @@ MZI4Figure <- fit |>
              y = y)) + 
   geom_line() + 
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
-  geom_point(data = recruit, aes(x = D_broad*100, y = Total), alpha = 0.4,
+  geom_point(data = recruit, aes(x = D_broad*100, y = Total), alpha = 0.4, size = 2,
              position = position_jitter(width = 0.1, height = 0.1))   +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' density (thalli/', m^{2}, ')'))) +
   scale_y_continuous('Number of coral recruits') +
@@ -877,14 +795,13 @@ recruitZI.brm4 |>
             Pg = mean(D_broad > 1))
 
 # MZI5: Recruit ~ Diversity (local) ----
-recruit |> dplyr::filter(Shannon_local_cor != 0) |> dplyr::select(Shannon_local_cor) |> min()/2
 recruit |> dplyr::filter(Shannon_local_alg != 0) |> dplyr::select(Shannon_local_alg) |> min()/2
 
 ## Fit model ----
 
 ## ---- MZI5Fit
-recruit.form <- bf(Total ~ scale(log(Shannon_local_cor + 0.04)) + scale(log(Shannon_local_alg + 0.01)) + 
-                     (1|Turf_height), 
+recruit.form <- bf(Total ~ log(Shannon_local_alg + 0.01) + 
+                     (1|Grazing), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -957,7 +874,7 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI5DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm5, recruit.form, priors, recruit, file = 'data/modelled/MZI5_Local_diversity.RData')
+#save(recruitZI.brm5, recruit.form, priors, recruit, file = 'data/modelled/MZI5_Local_diversity.RData')
 
 ## Investigation ----
 recruitZI.brm5 |> 
@@ -999,9 +916,8 @@ recruit |> dplyr::filter(Shannon_broad_alg != 0) |> dplyr::select(Shannon_broad_
 
 ## Fit model ----
 ## ---- MZI16Fit
-recruit.form <- bf(Total ~ scale(Shannon_broad_cor) + 
-                     scale(log(Shannon_broad_alg + 0.03)) + 
-                     (1|Turf_height), 
+recruit.form <- bf(Total ~ log(Shannon_broad_alg + 0.03) + 
+                     (1|Grazing), 
            zi ~ 1, 
            family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -1074,7 +990,7 @@ ggsave(filename = paste0(FIGS_PATH, '/MZI6DHARMa.png'),
        dpi = 300)
 
 ## Save model ----
-save(recruitZI.brm6, recruit.form, priors, recruit, file = 'data/modelled/MZI6_Broad_diversity.RData')
+#save(recruitZI.brm6, recruit.form, priors, recruit, file = 'data/modelled/MZI6_Broad_diversity.RData')
 
 ## Investigation ----
 recruitZI.brm6 |> 
