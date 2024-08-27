@@ -28,8 +28,7 @@ recruit <- read_csv(file = 'data/processed/recruit.csv', col_select = -1) |>
                                    ifelse(Treatment == 'Only mat', 'T3', 
                                           'T4'))),
          Grazing = factor(Grazing, c('No', 'Light', 'Medium', 'Heavy'), ordered = TRUE)) |>
-  mutate(Treatment = factor(Treatment)) |>
-  dplyr::filter(!is.na(Turf_height))
+  mutate(Treatment = factor(Treatment))
 
 recruit |>
   str()
@@ -418,7 +417,7 @@ MZI2Figure <- fit |>
   geom_point(data = recruit, aes(x = H_mean_broad, y = Total), alpha = 0.4, size = 2, 
              position = position_jitter(width = 0.1, height = 0.1)) +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
-  scale_y_continuous('Number of coral recruits') +
+  scale_y_continuous('Coral recruitment (recruits/tile)') +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
         axis.text = element_text(size = rel(1.2)),
@@ -564,7 +563,7 @@ MZI3Figure <- fit |>
   geom_point(data = recruit, aes(x = H_mean_local, y = Total), alpha = 0.4, size = 2, 
              position = position_jitter(width = 0.1, height = 0.1))  +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' height (cm)'))) +
-  scale_y_continuous('Number of coral recruits') +
+  scale_y_continuous('Coral recruitment (recruits/tile)') +
   labs(tag = 'a') +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
@@ -723,7 +722,7 @@ MZI4Figure <- fit |>
   geom_point(data = recruit, aes(x = D_broad*100, y = Total), alpha = 0.4, size = 2,
              position = position_jitter(width = 0.1, height = 0.1))   +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' density (thalli/', m^{2}, ')'))) +
-  scale_y_continuous('Number of coral recruits') +
+  scale_y_continuous('Coral recruitment (recruits/tile)') +
   labs(tag = 'b') +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
@@ -740,7 +739,8 @@ ggsave(file = paste0(FIGS_PATH, "/MZI4_Density_fig.png"),
        dpi = 300)
 
 # Summary fig (H + D) ----
-MZI3Figure / MZI4Figure
+MZI3Figure / MZI4Figure +
+  plot_layout(axis_titles = 'collect')
 
 ggsave(file = paste0(FIGS_PATH, "/MZI_H_D_fig.png"), 
        width = 200/1.2, 

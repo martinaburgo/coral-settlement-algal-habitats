@@ -1,5 +1,4 @@
 # PACKAGES ----
-
 library(tidyverse)
 library(readxl)
 library(vegan)
@@ -20,34 +19,25 @@ library(concaveman)
 source(file = 'R/functions.R')
 
 # READ DATA ----
-data <- read_xlsx(path = 'data/primary/CH3-recruits-count.xlsx', sheet = 1) |>
-  full_join(read_xlsx(path = 'data/primary/CH3-metadata.xlsx', sheet = 2) |>
-              dplyr::select(Tile, Treatment, T1_survey) |>
-              dplyr::filter(T1_survey == 'Done')) |>
-  full_join(read_xlsx(path = 'data/primary/CH3-tile-benthos.xlsx', sheet = 1)) |>
-  group_by(Tile) |>
-  mutate(Total = sum(Unbleached)) |>
-  dplyr::distinct(Tile, .keep_all = TRUE) |>
-  ungroup() |>
-  dplyr::select(Tile, Grazing, Treatment, T1_survey,
-                Sediment, Turf_height, Turf_cover, CCA_cover, Algae_cover, Total) |>
+data <- read_csv(file = 'data/processed/recruit.csv', col_select = -1) |>
+  mutate(Treatment = ifelse(Treatment == 'No algae', 'T1',
+                            ifelse(Treatment == 'Only canopy', 'T2',
+                                   ifelse(Treatment == 'Only mat', 'T3', 
+                                          'T4'))),
+         Grazing = factor(Grazing, c('No', 'Light', 'Medium', 'Heavy'), ordered = TRUE)) |>
+  mutate(Treatment = factor(Treatment)) |>
+  dplyr::select(Tile, Total, Treatment, Grazing) |>
   left_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
               dplyr::filter(Category != "Coral") |>
               dplyr::filter(Taxa != 'Zooanthids') |>
               dplyr::select(Time, Tile, Taxa, Cover) |>
-              mutate(Cover = ifelse(Cover == "+", '0.5', Cover)) |> #adjust rare species 
+              mutate(Cover = ifelse(Cover == "+", '1', Cover)) |> #adjust rare species 
               mutate(Cover = as.numeric(Cover)) |>
               group_by(Tile) |>
               mutate(Freq = Cover / sum(Cover)*100) |>
               ungroup() |>
               dplyr::select(-Cover) |>
-              tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0)) |>
-  dplyr::filter(T1_survey == 'Done') |>
-  dplyr::select(!T1_survey) |>
-  mutate(Treatment = ifelse(Treatment == 'No algae', 'T1',
-                            ifelse(Treatment == 'Only canopy', 'T2',
-                                   ifelse(Treatment == 'Only mat', 'T3', 
-                                          'T4'))))
+              tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0))
 #write.csv(data, file = 'data/processed/multivariate_data.csv')
 
 # for summary:
@@ -67,7 +57,7 @@ canopy <- read.csv('data/primary/canopy_data.csv')
 ## MDS Plot ----
 ## ---- MDS fit
 #non-metric multidimensional scaling
-data.mds <- metaMDS(data[,-c(1:10)], k=2,  plot=TRUE) #it always standardise by square root
+data.mds <- metaMDS(data[,-c(1:5)], k=2,  plot=TRUE) #it always standardise by square root
 data.mds #check that the stress is <0.2, the dimensions show to what reduction we drove the data
 stressplot(data.mds) #N.B. is usually a non linear trend
 ## ----end
@@ -76,7 +66,7 @@ data.mds.scores <- data.mds |>
   fortify() |> 
   mutate(Label = label,
          Score = score) |>
-  full_join(data[, 1:10] |> add_rownames(var='Label'))
+  full_join(data[, 1:5] |> add_rownames(var='Label'))
 data.mds.scores.centroids <- data.mds.scores |>
   filter(Score == "sites") |>
   group_by(Treatment) |>
@@ -125,18 +115,12 @@ ggplot() +
   ylab("NMDS2") + xlab("NMDS1")
 
 ## ---- ANOVA
-data.dist <- vegdist(wisconsin(data[,-c(1:10)]^0.25),"bray")
+data.dist <- vegdist(wisconsin(data[,-c(1:5)]^0.25),"bray")
 data.adonis<-adonis2(data.dist~Treatment,  data=data)
 data.adonis
 ## ----end
 
-Xmat <- model.matrix(~-1+Sediment+Turf_height+Algae_cover+CCA_cover, data=data) #need to dummy code because it's categorical variables
-colnames(Xmat) <-gsub("Treatment","",colnames(Xmat))
-envfit <- envfit(data.mds, env=Xmat)
-envfit #shows how different each variable is from the centroid, so a significant values is whether that variable is moved from the 'general' community
-
-
-# METHODS ----
+# Summary ----
 data |>
   dplyr::select(!c(Grazing, Sediment, Turf_height, 
                    Turf_cover, CCA_cover, Algae_cover, Total, Time)) |>
