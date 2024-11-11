@@ -56,7 +56,7 @@ scatterplotMatrix(~Total + H_mean_broad + H_mean_local + D_broad +
 ## Fit ----
 
 ## ---- MZI1Fit
-recruit.form <- bf(Total ~ Treatment + (1|Grazing), 
+recruit.form <- bf(Total ~ Treatment + Turf_height + (1|Grazing), 
                 zi ~ 1, 
                 family = zero_inflated_poisson(link = 'log'))
 ## ----end
@@ -750,7 +750,7 @@ ggsave(file = paste0(FIGS_PATH, "/MZI_H_D_fig.png"),
 
 # Compare H vs D ----
 ## ---- CompareMZI3vsMZI4
-loo::loo_compare(loo::loo(recruitZI.brm3),
+loo::loo_compare(loo::loo(recruitZI.brm2),
                  loo::loo(recruitZI.brm4))
 ## ----end
 

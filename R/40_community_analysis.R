@@ -48,10 +48,10 @@ data <- read_csv(file = 'data/processed/recruit.csv', col_select = -1) |>
   left_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
               mutate(Taxa = ifelse(Category == 'Coral', 'Coral',
                                    ifelse(Category == 'Other', 'Other', Taxa))) |>
-              dplyr::select(Time, Tile, Taxa, Cover) |>
+              dplyr::select(Tile, Taxa, Cover) |>
               mutate(Cover = ifelse(Cover == "+", '1', Cover)) |> #adjust rare species 
               mutate(Cover = as.numeric(Cover)) |>
-              group_by(Time, Tile, Taxa) |>
+              group_by(Tile, Taxa) |>
               summarise(Cover = sum(Cover)) |>
               ungroup() |>
               group_by(Tile) |>
@@ -63,146 +63,291 @@ data <- read_csv(file = 'data/processed/recruit.csv', col_select = -1) |>
 data |>
   glimpse()
 
-## nMDS ----
-data.mds <- metaMDS(data[,-c(1:8)], k=2,  plot=TRUE) #it always standardise by square root
-data.mds #check that the stress is <0.2, the dimensions show to what reduction we drove the data
-stressplot(data.mds)
+data[,-c(1:8)]^0.25 |> #square root
+  ggpairs(lower = list(continuous = "smooth"),
+          diag = list(continuous = "density"),
+          axisLabels = "show")
+
+data.std <- (data[,-c(1:8)]^0.25) |> 
+  wisconsin()
+data.std
+
+## PCA ----
+data.rda <- rda(data.std, 
+                scale = FALSE) 
+
+summary(data.rda, 
+        display = NULL)
+
+data.rda$tot.chi/data.rda$CA$v |> nrow() #threshold for what to keep
+
+autoplot(data.rda)
+autoplot(data.rda) + theme_bw()
+autoplot(data.rda, geom = 'text') + theme_bw()
+
+data.rda.scores <- data.rda |> 
+  fortify() |> #prepare for ggplot
+  full_join(data[, 1:3] |> add_column(data.rda |> 
+                                        fortify() |> 
+                                        as.data.frame() |> 
+                                        filter(score == 'sites') |> 
+                                        dplyr::select(label)), 
+            by = 'label')
+
+ggplot(data = NULL, aes(y = PC2, x = PC1)) + 
+  geom_point(data = data.rda.scores |> 
+               filter(score=='sites'),
+             mapping = aes(size = Total), alpha = 0.7) +
+  geom_segment(data = data.rda.scores |> filter(score == 'species') |> filter(label != 'Other'),
+               aes(y = 0, x = 0, yend = PC2, xend = PC1), alpha = 0.6) +
+  geom_text_repel(data = data.rda.scores |> filter(score == 'species') |> filter(label != 'Other'),
+                  aes(y = PC2*1.1, x = PC1*1.1, label=label), alpha = 0.7) +
+  #scale_x_continuous(limits = c(-0.7, 0.7)) +
+  #scale_y_continuous(limits = c(-0.7, 0.7)) +
+  scale_size('Coral recruitment \n (recruits/tile)') +
+  geom_hline(aes(yintercept = 0), linetype = 2, alpha = 0.3) +
+  geom_vline(aes(xintercept = 0), linetype = 2, alpha = 0.3) +
+  theme_classic() + theme(legend.position = c(0.9, 0.85), 
+                          legend.title = element_text(hjust = 1))
+
+# Functional diversity ----
+## Load data ----
+func_data <- read_csv(file = 'data/processed/recruit.csv', col_select = -1) |>
+  mutate(Treatment = ifelse(Treatment == 'No algae', 'T1',
+                            ifelse(Treatment == 'Only canopy', 'T2',
+                                   ifelse(Treatment == 'Only mat', 'T3', 
+                                          'T4'))),
+         Grazing = factor(Grazing, c('No', 'Light', 'Medium', 'Heavy'), ordered = TRUE)) |>
+  mutate(Treatment = factor(Treatment)) |>
+  dplyr::select(Tile, Total, Treatment, Grazing, H_mean_broad, D_broad, Shannon_broad_alg) |>
+  left_join(read_xlsx(path = 'data/primary/CH3-Algal-community-time-0.xlsx', sheet = 1) |>
+              mutate(Taxa = ifelse(Category == 'Coral', 'Coral',
+                                   ifelse(Category == 'Other', 'Other', Taxa))) |>
+              dplyr::select(Tile, Taxa, Cover) |>
+              mutate(Cover = ifelse(Cover == "+", '1', Cover)) |> #adjust rare species 
+              mutate(Cover = as.numeric(Cover)) |>
+              left_join(read.csv(file = 'data/primary/categories.csv')) |> 
+              mutate(spp = ifelse(!is.na(Functional.group), Functional.group, Taxa)) |> 
+              group_by(Tile, spp) |>
+              summarise(Cover = sum(Cover)) |>
+              ungroup() |>
+              group_by(Tile) |>
+              mutate(Freq = Cover / sum(Cover)*100) |>
+              ungroup() |>
+              dplyr::select(-Cover) |>
+              tidyr::pivot_wider(names_from = 'spp', values_from = 'Freq', values_fill = 0))
+
+func_data |>
+  glimpse()
+
+func_data[,-c(1:7)]^0.25 |> #square root
+  ggpairs(lower = list(continuous = "smooth"),
+          diag = list(continuous = "density"),
+          axisLabels = "show")
+
+data.std <- (func_data[,-c(1:7)]^0.25) |> 
+  wisconsin()
+data.std
+
+## PCA ----
+data.rda <- rda(data.std, 
+                scale = FALSE) 
+
+summary(data.rda, 
+        display = NULL)
+
+data.rda$tot.chi/data.rda$CA$v |> nrow() #threshold for what to keep
+
+autoplot(data.rda)
+autoplot(data.rda) + theme_bw()
+autoplot(data.rda, geom = 'text') + theme_bw()
+
+data.rda.scores <- data.rda |> 
+  fortify() |> #prepare for ggplot
+  full_join(func_data[, 1:3] |> add_column(data.rda |> 
+                                        fortify() |> 
+                                        as.data.frame() |> 
+                                        filter(score == 'sites') |> 
+                                        dplyr::select(label)), 
+            by = 'label')
+
+ggplot(data = NULL, aes(y = PC2, x = PC1)) + 
+  geom_point(data = data.rda.scores |> 
+               filter(score=='sites'),
+             mapping = aes(size = Total), alpha = 0.7) +
+  geom_segment(data = data.rda.scores |> filter(score == 'species') |> filter(label != 'Other'),
+               aes(y = 0, x = 0, yend = PC2, xend = PC1), alpha = 0.6) +
+  geom_text_repel(data = data.rda.scores |> filter(score == 'species') |> filter(label != 'Other'),
+                  aes(y = PC2*1.1, x = PC1*1.1, label=label), alpha = 0.7) +
+  scale_size('Coral recruitment \n (recruits/tile)') +
+  geom_hline(aes(yintercept = 0), linetype = 2, alpha = 0.3) +
+  geom_vline(aes(xintercept = 0), linetype = 2, alpha = 0.3) +
+  theme_classic() + theme(legend.position = c(0.9, 0.85), 
+                          legend.title = element_text(hjust = 1)) +
+  scale_y_continuous(paste(names(data.rda$CA$eig[2]), sprintf('(%0.1f%% explained var.)',
+                                                  100 * data.rda$CA$eig[2]/data.rda$CA$tot.chi)),
+                     limits = c(-0.5, 0.5))+
+  scale_x_continuous(paste(names(data.rda$CA$eig[1]), sprintf('(%0.1f%% explained var.)',
+                                                  100 * data.rda$CA$eig[1]/data.rda$CA$tot.chi)),
+                     limits = c(-0.5, 0.5))
+
+func_data[, c(5:7)] |>
+  cor() |> 
+  corrplot(type = 'upper',
+           order = 'FPC',
+           diag = FALSE)
+
+func_data[, c(5:7)] |> 
+  ggpairs(lower = list(continuous = "smooth"),
+          diag = list(continuous = "density"),
+          axisLabels = "show")
+
+data.envfit <- envfit(data.rda, env = func_data[, c(5:7)])
+data.envfit 
+
+data.env.scores <- data.envfit |> 
+  fortify()
+
+ggplot(data = NULL, aes(y = PC2, x = PC1)) + 
+  geom_point(data = data.rda.scores |> 
+               filter(score=='sites'),
+             mapping = aes(size = Total), alpha = 0.7) +
+  geom_segment(data = data.rda.scores |> filter(score == 'species') |> filter(label != 'Other'),
+               aes(y = 0, x = 0, yend = PC2, xend = PC1), alpha = 0.6) +
+  geom_text_repel(data = data.rda.scores |> filter(score == 'species') |> filter(label != 'Other'),
+                  aes(y = PC2*1.1, x = PC1*1.1, label=label), alpha = 0.7) +
+  #scale_x_continuous(limits = c(-0.7, 0.7)) +
+  #scale_y_continuous(limits = c(-0.7, 0.7)) +
+  scale_size('Coral recruitment \n (recruits/tile)') +
+  geom_hline(aes(yintercept = 0), linetype = 2, alpha = 0.3) +
+  geom_vline(aes(xintercept = 0), linetype = 2, alpha = 0.3) +
+  theme_classic() + theme(legend.position = c(0.9, 0.85), 
+                          legend.title = element_text(hjust = 1)) +
+  scale_y_continuous(paste(names(data.rda$CA$eig[2]), sprintf('(%0.1f%% explained var.)',
+                                                              100 * data.rda$CA$eig[2]/data.rda$CA$tot.chi)))+
+  scale_x_continuous(paste(names(data.rda$CA$eig[1]), sprintf('(%0.1f%% explained var.)',
+                                                              100 * data.rda$CA$eig[1]/data.rda$CA$tot.chi))) + 
+  geom_segment(data = data.env.scores,
+               aes(y = 0, x = 0, yend = PC2, xend = PC1),
+               arrow = arrow(length = unit(0.3,'lines')), color = 'blue') +
+  geom_text(data = data.env.scores,
+            aes(y = PC2*1.1, x = PC1*1.1, label = label), color = 'blue')
+
+pc1 <- data.rda.scores |> 
+  filter(score=='sites') |> 
+  pull(PC1)
+pc2 <- data.rda.scores |> 
+  filter(score=='sites') |> 
+  pull(PC2)
 
 
-data.mds$stress 
-stressplot(data.mds)
-data.mds.scores <- data.mds |> 
-  fortify() |> 
-  mutate(Label = label,
-         Score = score) |>
-  full_join(data[, 1:5] |> add_rownames(var='Label'))
-data.mds.scores.centroids <- data.mds.scores |>
-  filter(Score == "sites") |>
-  group_by(Treatment) |>
-  summarise(across(c(NMDS1, NMDS2), list(c = mean)))
-data.mds.scores <- data.mds.scores |>
-  full_join(data.mds.scores.centroids)
+lm(1:nrow(func_data[, c(5:7)]) ~ H_mean_broad  + D_broad  + Shannon_broad_alg , 
+   data = func_data[, c(5:7)]) |>
+  vif() #to calculate which predictors cannot be modeled together
+#remove some:
+lm(1:nrow(func_data[, c(5:7)]) ~ D_broad  + Shannon_broad_alg , 
+   data = func_data[, c(5:7)]) |>
+  vif()
 
-col_vals <- c("T4" = "#8dd3c7", 
-              "T1" = "#fb8072", 
-              "T2" = "#d1a95e",
-              "T3" = "#a0c58b")
-
-ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) + 
-  geom_point(data=data.mds.scores |> 
-               filter(Score=='sites'),
-             aes(size = Total, colour = Treatment), alpha = 0.7) +
-  geom_segment(data = data.mds.scores |> filter(Score == 'species') |> filter(label != 'Other'),
-               aes(y = 0, x = 0, yend = NMDS2, xend = NMDS1), alpha = 0.6) +
-  geom_text_repel(data = data.mds.scores |> filter(Score == 'species') |> filter(label != 'Other'),
-                  aes(y = NMDS2*1.1, x = NMDS1*1.1, label=Label), alpha = 0.7) +
-  scale_colour_manual(values = col_vals) + scale_size(guide = 'none') +
-  theme_bw() + theme(legend.position = c(0.95, 0.85))
-
-data.std <- wisconsin(data[,-c(1:8)]^0.25)
-
-simper(data.std, data$Total) |> 
+lm(pc1 ~ H_mean_broad  + D_broad  + Shannon_broad_alg, 
+   data = func_data[, c(5:7)]) |> 
   summary()
 
-## brms ----
+lm(pc2 ~ H_mean_broad  + D_broad  + Shannon_broad_alg, 
+   data = func_data[, c(5:7)]) |> 
+  summary()
 
-nMDS.data <- data.mds.scores |> 
-  dplyr::filter(score == 'sites') |>
-  left_join(data |> 
-              dplyr::select(Tile, H_mean_broad, D_broad, Shannon_broad_alg))
-nMDS.data |>
-  ggplot(mapping = aes(y = NMDS2, x = NMDS1)) +
-  geom_point(mapping = aes(size = Total, colour = Shannon_broad_alg)) +
-  theme_bw()
+## CCA ----
+data.cca <- cca(data.std~H_mean_broad + D_broad + Shannon_broad_alg, data=data[, c(1:7)], scale=FALSE)
 
-nMDS.data |>
-  ggplot(mapping = aes(y = NMDS2, x = NMDS1)) +
-  geom_point(mapping = aes(size = Total, colour = H_mean_broad)) +
-  theme_bw()
+summary(data.cca, display=NULL)
+anova(data.cca)
 
-# Recruits vs nMDS
-data.form <- bf(D_broad ~ NMDS1 + NMDS2, family = gaussian(link = 'log'))
-data.form |> get_prior(data = nMDS.data)
+autoplot(data.cca)
+vif.cca(data.cca)
+#overall test
+anova(data.cca)
+anova(data.cca, by='axis')
+anova(data.cca, by='margin')
 
-priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(0, 5), class = 'b')  +
-  prior(student_t(3, 0, 1), class = 'sigma')
+coef(data.cca)
 
-nMDS.brm <- brm(data.form, prior = priors, data = nMDS.data, 
-                      sample_prior = 'yes', 
-                      iter = 5000, 
-                      warmup = 1000, 
-                      chains = 3, cores = 3, 
-                      control = list(adapt_delta = 0.99, 
-                                     max_treedepth = 20), 
-                      thin = 5, 
-                      refresh = 100, 
-                      backend = 'rstan') 
+RsquareAdj(data.cca)
 
-nMDS.brm |>
-  brms::as_draws_df() |>
-  dplyr::select(starts_with('b_')) |>
-  mutate(across(everything(), exp)) |>
-  summarise_draws(median,
-                  HDInterval::hdi,
-                  rhat, length, ess_bulk, ess_tail,
-                  Pl = ~mean(.x < 1),
-                  Pg = ~mean(.x > 1))
+screeplot(data.cca)
 
-# H vs nMDS
-data.form <- bf(H_mean_broad ~ NMDS1 + NMDS2, family = gaussian(link = 'log'))
-data.form |> get_prior(data = nMDS.data)
+data.cca.scores <- data.cca |> 
+  fortify() |> #prepare for ggplot
+  full_join(func_data[, 1:7] |> add_column(data.cca |> 
+                                             fortify() |> 
+                                             as.data.frame() |> 
+                                             filter(score == 'sites') |> 
+                                             dplyr::select(label)), 
+            by = 'label')
 
-priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(0, 5), class = 'b')  +
-  prior(student_t(3, 0, 1), class = 'sigma')
+ggplot(data = NULL, aes(y = CCA2, x = CCA1)) + 
+  geom_point(data = data.cca.scores |> 
+               filter(score=='sites'),
+             mapping = aes(size = Total), alpha = 0.7) +
+  geom_segment(data = data.cca.scores |> filter(score == 'species') |> filter(label != 'Other'),
+               aes(y = 0, x = 0, yend = CCA2, xend = CCA1), alpha = 0.6) +
+  geom_text_repel(data = data.cca.scores |> filter(score == 'species') |> filter(label != 'Other'),
+                  aes(y = CCA2*1.1, x = CCA1*1.1, label=label), alpha = 0.7) +
+  scale_size('Coral recruitment \n (recruits/tile)') +
+  geom_hline(aes(yintercept = 0), linetype = 2, alpha = 0.3) +
+  geom_vline(aes(xintercept = 0), linetype = 2, alpha = 0.3) +
+  theme_classic() + theme(legend.position = c(0.9, 0.85), 
+                          legend.title = element_text(hjust = 1),
+                          legend.background = element_blank()) +
+  scale_y_continuous(limits = c(-2.2, 2.2))+
+  scale_x_continuous(limits = c(-2.2, 2.2))
 
-nMDS.brm2 <- brm(data.form, prior = priors, data = nMDS.data, 
-                sample_prior = 'yes', 
-                iter = 5000, 
-                warmup = 1000, 
-                chains = 3, cores = 3, 
-                control = list(adapt_delta = 0.99, 
-                               max_treedepth = 20), 
-                thin = 5, 
-                refresh = 100, 
-                backend = 'rstan') 
+func_data[, c(2, 5:7)] |>
+  cor() |> 
+  corrplot(type = 'upper',
+           order = 'FPC',
+           diag = FALSE)
 
-nMDS.brm2 |>
-  brms::as_draws_df() |>
-  dplyr::select(starts_with('b_')) |>
-  mutate(across(everything(), exp)) |>
-  summarise_draws(median,
-                  HDInterval::hdi,
-                  rhat, length, ess_bulk, ess_tail,
-                  Pl = ~mean(.x < 1),
-                  Pg = ~mean(.x > 1))
+func_data[, c(2, 5:7)] |> 
+  ggpairs(lower = list(continuous = "smooth"),
+          diag = list(continuous = "density"),
+          axisLabels = "show")
 
-# Diversity vs nMDS
-data.form <- bf(Shannon_broad_alg ~ NMDS1 + NMDS2, family = gaussian(link = 'log'))
-data.form |> get_prior(data = nMDS.data)
+data.envfit <- envfit(data.cca, env = func_data[, c(2,5:7)])
+data.envfit 
 
-priors <- prior(normal(0.5, 3), class = 'Intercept') +
-  prior(normal(0, 5), class = 'b')  +
-  prior(student_t(3, 0, 1), class = 'sigma')
+data.env.scores <- data.envfit |> 
+  fortify()
 
-nMDS.brm3 <- brm(data.form, prior = priors, data = nMDS.data, 
-                 sample_prior = 'yes', 
-                 iter = 5000, 
-                 warmup = 1000, 
-                 chains = 3, cores = 3, 
-                 control = list(adapt_delta = 0.99, 
-                                max_treedepth = 20), 
-                 thin = 5, 
-                 refresh = 100, 
-                 backend = 'rstan') 
+cca1 <- data.cca.scores |> 
+  filter(score=='sites') |> 
+  pull(CCA1)
+cca2 <- data.cca.scores |> 
+  filter(score=='sites') |> 
+  pull(CCA2)
 
-nMDS.brm3 |>
-  brms::as_draws_df() |>
-  dplyr::select(starts_with('b_')) |>
-  mutate(across(everything(), exp)) |>
-  summarise_draws(median,
-                  HDInterval::hdi,
-                  rhat, length, ess_bulk, ess_tail,
-                  Pl = ~mean(.x < 1),
-                  Pg = ~mean(.x > 1))
+
+lm(1:nrow(func_data[, c(2, 5:7)]) ~ H_mean_broad  + D_broad  + Shannon_broad_alg , 
+   data = func_data[, c(2, 5:7)]) |>
+  vif() #to calculate which predictors cannot be modeled together
+#remove some:
+lm(1:nrow(func_data[, c(2, 5:7)]) ~ H_mean_broad  + D_broad, 
+   data = func_data[, c(2, 5:7)]) |>
+  vif()
+
+#you could run it Bayesian!
+lm(cca1 ~ H_mean_broad  +D_broad, 
+   data = func_data[, c(2, 5:7)]) |> 
+  summary()
+
+lm(cca2 ~ H_mean_broad  +D_broad , 
+   data = func_data[, c(2, 5:7)]) |> 
+  summary()
+
+lm(cca1 ~ Shannon_broad_alg, 
+   data = func_data[, c(2, 5:7)]) |> 
+  summary()
+
+lm(cca2 ~ Shannon_broad_alg, 
+   data = func_data[, c(2, 5:7)]) |> 
+  summary()

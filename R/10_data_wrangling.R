@@ -188,6 +188,7 @@ canopy <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", she
                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-8.xlsx", sheet = "Florence")) |>
   dplyr::select(!c(Date, Metre, Taxa, Diameter, Interaction, Distance)) |>
   dplyr::filter(!is.na(Thalli))
+
 # create coral class sizes
 breaks <- c(0, 5, 20,  40, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
 tags <- c("<5", "6-20", '21-40', '>40') # specify interval/bin labels
@@ -218,10 +219,10 @@ data <- corals |>
                               ordered = TRUE)) |>
   dplyr::select(Habitat, Transect, Quadrat, Taxa, Diameter, class_sizes) |>
   left_join(canopy |> 
-              dplyr::filter(Trip == '3' | Trip == '2') |>
+              dplyr::filter(Trip == '2' | Trip == '3' | Trip == '4' | Trip == '5') |>
               dplyr::select(Habitat, Transect, Trip, Quadrat, Mean) |>
               group_by(Habitat, Transect, Quadrat) |>
-              summarise(Mean = mean(Mean))) |>
+              summarise(Mean = mean(Mean))) |> 
   mutate(across(where(is.numeric), coalesce, 0)) |>
   mutate(Depth = ifelse(Habitat == 'Flat', '0-1 m',
                         ifelse(Habitat == 'Crest', '2-3 m',

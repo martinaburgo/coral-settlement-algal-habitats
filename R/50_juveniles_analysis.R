@@ -210,6 +210,39 @@ ggsave(file = paste0(FIGS_PATH, "/MN2_height.png"),
        units = "mm", 
        dpi = 300)
 
+## V2
+ggplot() +
+  geom_ribbon(data = preds, 
+              aes(x = Mean, 
+                  ymin = ymin, 
+                  ymax = ymax, 
+                  fill = .category), 
+              alpha = 0.2) +
+  geom_line(data = preds, 
+            aes(y = y,
+                x = Mean, 
+                colour = .category), 
+            size = 0.8) +
+  labs(col = 'Coral class size (cm)', 
+       fill = 'Coral class size (cm)', 
+       x = expression(paste('Canopy height (cm)')))  +
+  scale_y_continuous(name = "Probability") +
+  scale_fill_viridis_d(option = 'D') +
+  scale_colour_viridis_d(option = 'D') +
+  theme_classic() +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.1)),
+        axis.title = element_text(size = rel(1.2)),
+        legend.text = element_text(size = rel(1.1)),
+        legend.title = element_text(size = rel(1.2)),
+        legend.position = 'bottom')
+
+ggsave(file = paste0(FIGS_PATH, "/MN2_height.png"), 
+       width = 160, 
+       height = 160/1.4, 
+       units = "mm", 
+       dpi = 300)
+
 
 # Thresholds ----
 add_epred_draws(size.brm2, 
