@@ -189,6 +189,29 @@ canopy <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-1.xlsx", she
   dplyr::select(!c(Date, Metre, Taxa, Diameter, Interaction, Distance)) |>
   dplyr::filter(!is.na(Thalli))
 
+benthos <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-2.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-3.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-4.xlsx", sheet = "Florence"),
+                 readxl::read_xlsx(path = "data/primary/Maggie-Quads-5.xlsx", sheet = "Florence")) |> 
+  dplyr::filter(!is.na(Cover)) |> 
+  dplyr::select(-c(Island, Site, Period, Date, Metre, Interaction, Diameter, Distance, Height, Thalli)) |> 
+  left_join(read.csv(file = 'data/primary/categories.csv') |> 
+              dplyr::select(Taxa, Category)) |> 
+  mutate(Cover = ifelse(Cover == '+', 1, Cover) |> as.numeric()) |> 
+  group_by(Habitat, Trip, Transect, Quadrat, Taxa) |> 
+  mutate(Cover = mean(Cover)) |>
+  ungroup() |>
+  dplyr::distinct(Habitat, Trip, Transect, Quadrat, Taxa, .keep_all = TRUE) |> 
+  group_by(Habitat, Trip, Transect, Quadrat) |> 
+  mutate(Freq = Cover / sum(Cover)*100) |>
+  ungroup() |>
+  dplyr::select(-Cover) |>
+  dplyr::filter(Category == 'Alga') |> 
+  dplyr::select(-Category) |>
+  tidyr::pivot_wider(names_from = 'Taxa', values_from = 'Freq', values_fill = 0)
+
+
+## Wrangling ----
 # create coral class sizes
 breaks <- c(0, 5, 20,  40, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
 tags <- c("<5", "6-20", '21-40', '>40') # specify interval/bin labels
@@ -213,6 +236,17 @@ for (i in 1:nrow(canopy)) {
 canopy <- canopy |>
   mutate(Mean = as.numeric(Mean))
 
+# Calculate diversity + cover of Sargassum and Lobophora
+benthos <- benthos[,1:4] |> 
+  mutate(Diversity = benthos[, -c(1:4)] |> diversity()) |> 
+  add_column(benthos |> dplyr::select(Sargassum, Lobophora))|> 
+  group_by(Habitat, Transect, Quadrat) |> 
+  summarise(Diversity = mean(Diversity),
+            Sargassum = mean(Sargassum),
+            Lobophora = mean(Lobophora))
+
+
+# Combine datasets
 data <- corals |> 
   mutate(class_sizes = factor(group_tags, 
                               levels = tags,
@@ -220,13 +254,15 @@ data <- corals |>
   dplyr::select(Habitat, Transect, Quadrat, Taxa, Diameter, class_sizes) |>
   left_join(canopy |> 
               dplyr::filter(Trip == '2' | Trip == '3' | Trip == '4' | Trip == '5') |>
-              dplyr::select(Habitat, Transect, Trip, Quadrat, Mean) |>
+              dplyr::select(Habitat, Transect, Trip, Quadrat, Mean, Thalli) |>
               group_by(Habitat, Transect, Quadrat) |>
-              summarise(Mean = mean(Mean))) |> 
+              summarise(Mean = mean(Mean),
+                        Density = mean(Thalli))) |> 
   mutate(across(where(is.numeric), coalesce, 0)) |>
   mutate(Depth = ifelse(Habitat == 'Flat', '0-1 m',
                         ifelse(Habitat == 'Crest', '2-3 m',
-                               '4-5 m')))
+                               '4-5 m'))) |> 
+  left_join(benthos)
 
 ## Save dataset ----
 #write.csv(data, file = 'data/processed/natural_recruitment.csv')
