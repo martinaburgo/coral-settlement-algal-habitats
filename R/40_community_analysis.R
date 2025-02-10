@@ -306,7 +306,10 @@ dataZI.brm |>
                   Pl = ~mean(.x < 1),
                   Pg = ~mean(.x > 1))
 ### ----end
-dataZI.brm |> 
+
+### Figure ----
+
+Sarg <- dataZI.brm |> 
   emmeans(~Sargassum, at = with(data,
                                    list(Sargassum = seq(min(Sargassum),
                                                            max(Sargassum),
@@ -324,6 +327,7 @@ dataZI.brm |>
              position = position_jitter(width = 0.1, height = 0.1)) +
   scale_x_continuous(name = expression(paste(italic('Sargassum'), ' cover (%)'))) +
   scale_y_continuous('Coral recruitment (recruits/tile)') +
+  labs(tag = 'a')  +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
         axis.text = element_text(size = rel(1.2)),
@@ -331,7 +335,7 @@ dataZI.brm |>
         legend.text = element_text(size = rel(1.2)),
         legend.title = element_text(size = rel(1.5)))
 
-dataZI.brm |> 
+Lobo <- dataZI.brm |> 
   emmeans(~Lobophora, at = with(data,
                                 list(Lobophora = seq(min(Lobophora),
                                                      max(Lobophora),
@@ -349,6 +353,7 @@ dataZI.brm |>
              position = position_jitter(width = 0.1, height = 0.1)) +
   scale_x_continuous(name = expression(paste(italic('Lobophora'), ' cover (%)'))) +
   scale_y_continuous('Coral recruitment (recruits/tile)') +
+  labs(tag = 'b')  +
   theme_classic()  +
   theme(text = element_text(colour = 'black'), 
         axis.text = element_text(size = rel(1.2)),
@@ -356,6 +361,66 @@ dataZI.brm |>
         legend.text = element_text(size = rel(1.2)),
         legend.title = element_text(size = rel(1.5)))
 
+Hyp <- dataZI.brm |> 
+  emmeans(~Hypnea, at = with(data,
+                                list(Hypnea = seq(min(Hypnea),
+                                                     max(Hypnea),
+                                                     len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(Hypnea) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame() |> 
+  ggplot(aes(x = Hypnea,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = data, aes(x = Hypnea, y = Total), alpha = 0.4, size = 2, 
+             position = position_jitter(width = 0.1, height = 0.1)) +
+  scale_x_continuous(name = expression(paste(italic('Hypnea'), ' cover (%)'))) +
+  scale_y_continuous('Coral recruitment (recruits/tile)') +
+  labs(tag = 'c')  +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+
+Colp <- dataZI.brm |> 
+  emmeans(~Colpomenia, at = with(data,
+                             list(Colpomenia = seq(min(Colpomenia),
+                                               max(Colpomenia),
+                                               len = 50)))) |>
+  gather_emmeans_draws() |>
+  mutate(.value = exp(.value)) |>
+  group_by(Colpomenia) |>
+  summarise(median_hdci(.value)) |>
+  as.data.frame() |> 
+  ggplot(aes(x = Colpomenia,
+             y = y)) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.2) +
+  geom_point(data = data, aes(x = Colpomenia, y = Total), alpha = 0.4, size = 2, 
+             position = position_jitter(width = 0.1, height = 0.1)) +
+  scale_x_continuous(name = expression(paste(italic('Colpomenia'), ' cover (%)'))) +
+  scale_y_continuous('Coral recruitment (recruits/tile)') +
+  labs(tag = 'd')  +
+  theme_classic()  +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.5)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.5)))
+
+(Sarg + Lobo + Hyp + Colp) +
+  plot_layout(axis_titles = 'collect', nrow = 2, )
+
+ggsave(file = paste0(FIGS_PATH, "/MZI_algae_fig.png"), 
+       width = 200, 
+       height = 200/1.2, 
+       units = "mm", 
+       dpi = 300)
 
 # Functional diversity ----
 ## Load data ----

@@ -21,8 +21,10 @@ source('R/functions.R')
 recruit <- read_csv(file = 'data/processed/recruit.csv', col_select = -1) |>
   mutate(Sediment = factor(Sediment,
                            c('No', 'Low', 'Medium', 'High'), ordered = TRUE),
-         Turf_height = factor(Turf_height,
-                              c('No', 'Low', 'Medium', 'High'), ordered = TRUE),
+         Turf_height = ifelse(Treatment == 'No', '0',
+                              ifelse(Treatment == 'Low', '1',
+                                     ifelse(Treatment == 'Medium', '2', 
+                                            '3'))) |> as.numeric(),
          Treatment = ifelse(Treatment == 'No algae', 'T1',
                             ifelse(Treatment == 'Only canopy', 'T2',
                                    ifelse(Treatment == 'Only mat', 'T3', 
@@ -80,7 +82,7 @@ recruitZI.brm <- brm(recruit.form, prior = priors, data = recruit,
 
 recruitZI.brm |>
   conditional_effects() |>
-  plot(points = TRUE)
+  plot(points = TRUE, ask = FALSE)
 
 recruitZI.brm |> 
   SUYR_prior_and_posterior()   +
@@ -202,7 +204,8 @@ recruitZI.brm |>
 ## Further investigation ----
 
 ### ---- ZIPlannedContrast
-cmat <- cbind('Mat_Canopy' = c(1/2, -1/2, 1/2, -1/2))
+cmat <- cbind('Mat_Canopy' = c(1/2, -1/2, 1/2, -1/2),
+              'Canopy_T1' = c(1, -1/2, 0, -1/2))
 recruitZI.brm |>
   emmeans(~Treatment, type = 'link') |>
   contrast(method = list(Treatment = cmat)) |>
@@ -750,7 +753,7 @@ ggsave(file = paste0(FIGS_PATH, "/MZI_H_D_fig.png"),
 
 # Compare H vs D ----
 ## ---- CompareMZI3vsMZI4
-loo::loo_compare(loo::loo(recruitZI.brm2),
+loo::loo_compare(loo::loo(recruitZI.brm3),
                  loo::loo(recruitZI.brm4))
 ## ----end
 

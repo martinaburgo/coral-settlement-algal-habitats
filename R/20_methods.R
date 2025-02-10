@@ -169,6 +169,8 @@ benthos |>
 
 
 # algal genera in each treatment:
+stderror <- function(x) sd(x)/sqrt(length(x))
+
 data |>
   pivot_longer(names_to = 'Taxa', values_to = 'Cover', cols = 11:26) |>
   dplyr::select(Tile, Treatment, Taxa, Cover) |>
