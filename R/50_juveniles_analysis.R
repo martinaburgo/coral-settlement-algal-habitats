@@ -28,7 +28,7 @@ data |> glimpse()
 data <- data |>
   mutate(Habitat = factor(Habitat, levels = c('Flat', 'Crest', 'Slope'), 
                         ordered = TRUE),
-         class_sizes = factor(class_sizes, levels = c('<5', '6-20', '21-40', '>40'), 
+         class_sizes = factor(class_sizes, levels = c('0-20', '21-40', '>40'), 
                               ordered = TRUE),
          Depth = factor(factor(Depth, levels = c('0-1 m', '2-3 m', '4-5 m'), 
                                ordered = TRUE)))
@@ -254,7 +254,7 @@ ggsave(file = paste0(FIGS_PATH, "/MN2_height.png"),
        dpi = 300)
 
 ## V2
-MN2Figure <- ggplot() +
+MN2Figure_H <- ggplot() +
   geom_ribbon(data = preds, 
               aes(x = Mean, 
                   ymin = ymin, 
@@ -281,6 +281,41 @@ MN2Figure <- ggplot() +
         legend.title = element_text(size = rel(1.2)),
         legend.position = 'bottom')
 
+MN2Figure_D <- add_epred_draws(size.brm2, 
+                               newdata = expand.grid(Density = seq(min(data$Density), max(data$Density), len = 100),
+                                                     Mean = mean(data$Mean)),
+                               re_formula = NA) |>
+  group_by(Density, .category) |>
+  summarise(median_hdci(.epred)) |> 
+  ggplot() +
+  geom_ribbon(aes(x = Density, 
+                  ymin = ymin, 
+                  ymax = ymax, 
+                  fill = .category), 
+              alpha = 0.2) +
+  geom_line(aes(y = y,
+                x = Density, 
+                colour = .category), 
+            size = 0.8) +
+  labs(col = 'Coral class size (cm)', 
+       fill = 'Coral class size (cm)', 
+       x = expression(paste(italic('Sargassum'), ' density (thalli/', m^{2}, ')')),
+       tag = 'b')  +
+  scale_y_continuous(name = "Probability") +
+  scale_fill_viridis_d(option = 'D') +
+  scale_colour_viridis_d(option = 'D') +
+  theme_classic() +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.1)),
+        axis.title = element_text(size = rel(1.2)),
+        legend.text = element_text(size = rel(1.1)),
+        legend.title = element_text(size = rel(1.2)),
+        legend.position = 'bottom')
+
+(MN2Figure_H + MN2Figure_D) +
+  plot_layout(axis_titles = 'collect', ncol = 2, guides = 'collect')  &
+  theme(legend.position = 'bottom')
+
 ggsave(file = paste0(FIGS_PATH, "/MN2_HandD.png"), 
        width = 160, 
        height = 160/1.4, 
@@ -296,7 +331,7 @@ add_epred_draws(size.brm2,
                                       Density = mean(data$Density)), 
                 re_formula = NA) |>
   group_by(Mean, .category) |>
-  filter(.epred < 0.1 & .category == '<5') |>
+  filter(.epred < 0.1 & .category == '0-20') |>
   ungroup() |>
   summarise(median_hdci(Mean),
             Pl = mean(Mean < 1),
@@ -433,7 +468,7 @@ preds <- add_epred_draws(size.brm3,
   group_by(Sargassum, .category) |>
   summarise(median_hdci(.epred))
 
-MN3Figure <- ggplot() +
+MN3Figure_Sarg <- ggplot() +
   geom_ribbon(data = preds, 
               aes(x = Sargassum, 
                   ymin = ymin, 
@@ -448,7 +483,43 @@ MN3Figure <- ggplot() +
   labs(col = 'Coral class size (cm)', 
        fill = 'Coral class size (cm)', 
        x = expression(italic(Sargassum)*' cover (%)'),
-       tag = 'b')  +
+       tag = 'c')  +
+  scale_y_continuous(name = "Probability") +
+  scale_fill_viridis_d(option = 'D') +
+  scale_colour_viridis_d(option = 'D') +
+  theme_classic() +
+  theme(text = element_text(colour = 'black'), 
+        axis.text = element_text(size = rel(1.1)),
+        axis.title = element_text(size = rel(1.2)),
+        legend.text = element_text(size = rel(1.1)),
+        legend.title = element_text(size = rel(1.2)),
+        legend.position = 'bottom')
+
+preds <- add_epred_draws(size.brm3, 
+                         newdata = expand.grid(Lobophora = seq(min(data$Lobophora),
+                                                               max(data$Lobophora),
+                                                               len = 100),
+                                               Sargassum = mean(data$Sargassum)), 
+                         re_formula = NA) |>
+  group_by(Lobophora, .category) |>
+  summarise(median_hdci(.epred))
+
+MN3Figure_Lobo <- ggplot() +
+  geom_ribbon(data = preds, 
+              aes(x = Lobophora, 
+                  ymin = ymin, 
+                  ymax = ymax, 
+                  fill = .category), 
+              alpha = 0.2) +
+  geom_line(data = preds, 
+            aes(y = y,
+                x = Lobophora, 
+                colour = .category), 
+            size = 0.8) +
+  labs(col = 'Coral class size (cm)', 
+       fill = 'Coral class size (cm)', 
+       x = expression(italic(Lobophora)*' cover (%)'),
+       tag = 'd')  +
   scale_y_continuous(name = "Probability") +
   scale_fill_viridis_d(option = 'D') +
   scale_colour_viridis_d(option = 'D') +
@@ -467,12 +538,12 @@ ggsave(file = paste0(FIGS_PATH, "/MN3_sargassum.png"),
        dpi = 300)
 
 # Combined figure ----
-MN2Figure / MN3Figure +
-  plot_layout(axis_titles = 'collect', guides = 'collect') &
+MN2Figure_H + MN2Figure_D + MN3Figure_Sarg + MN3Figure_Lobo +
+  plot_layout(axis_titles = 'collect', ncol = 2, guides = 'collect')  &
   theme(legend.position = 'bottom')
 
 ggsave(file = paste0(FIGS_PATH, "/MN_combined.png"), 
-       width = 220/1.4, 
+       width = 220, 
        height = 220, 
        units = "mm", 
        dpi = 300)

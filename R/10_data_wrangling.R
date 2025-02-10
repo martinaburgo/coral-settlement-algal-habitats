@@ -213,8 +213,8 @@ benthos <- rbind(readxl::read_xlsx(path = "data/primary/Maggie-Quads-2.xlsx", sh
 
 ## Wrangling ----
 # create coral class sizes
-breaks <- c(0, 5, 20,  40, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
-tags <- c("<5", "6-20", '21-40', '>40') # specify interval/bin labels
+breaks <- c(0, 20,  40, max(corals$Diameter, na.rm = TRUE)) # set up cut-off values 
+tags <- c("0-20", '21-40', '>40') # specify interval/bin labels
 group_tags <- cut(corals$Diameter, 
                   breaks = breaks, 
                   include.lowest = TRUE, 
