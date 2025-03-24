@@ -204,8 +204,8 @@ recruitZI.brm |>
 ## Further investigation ----
 
 ### ---- ZIPlannedContrast
-cmat <- cbind('Mat_Canopy' = c(1/2, -1/2, 1/2, -1/2),
-              'Canopy_T1' = c(1, -1/2, 0, -1/2))
+cmat <- cbind('Mat_Canopy' = c(-1/2, 1/2, -1/2, 1/2),
+              'Canopy_T1' = c(-1, 1/2, 0, 1/2))
 recruitZI.brm |>
   emmeans(~Treatment, type = 'link') |>
   contrast(method = list(Treatment = cmat)) |>

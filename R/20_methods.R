@@ -88,12 +88,16 @@ nMDS_plot <- ggplot(data = NULL, aes(y = NMDS2, x = NMDS1)) +
                                  colour = Treatment), expand = 0, alpha = 0.2) + 
   geom_point(data=data.mds.scores |> 
                filter(Score=='sites'),
-             aes(color = Treatment, shape = Treatment), size = 2, alpha = 0.6) +
+             aes(color = Treatment, size = Total, shape = Treatment), 
+             #size = 2, 
+             alpha = 0.6) +
   geom_segment(data = data.mds.scores |> filter(Score == 'species'),
                  aes(y = 0, x = 0, yend = NMDS2, xend = NMDS1), alpha = 0.7) +
     geom_text_repel(data = data.mds.scores |> filter(Score == 'species'),
               aes(y = NMDS2*1.1, x = NMDS1*1.1, label=Label), alpha = 0.7) +
   scale_colour_manual(values = col_vals) + scale_fill_manual(values = col_vals) +
+  scale_shape_manual(values = c(15, 16, 17, 18)) + 
+  scale_size(guide = 'none', range = c(3, 6)) +
     theme_classic() + theme(legend.position = c(0.85, 0.2))
 nMDS_plot
 
@@ -172,10 +176,11 @@ benthos |>
 stderror <- function(x) sd(x)/sqrt(length(x))
 
 data |>
-  pivot_longer(names_to = 'Taxa', values_to = 'Cover', cols = 11:26) |>
+  pivot_longer(names_to = 'Taxa', values_to = 'Cover', cols = 6:21) |>
   dplyr::select(Tile, Treatment, Taxa, Cover) |>
   group_by(Treatment, Taxa) |>
-  summarise(avg = round(mean(Cover), 1)) |>
+  summarise(avg = round(mean(Cover), 1),
+            se = round(stderror(Cover),)) |>
   arrange(Treatment, desc(avg)) |>
   View()
 
